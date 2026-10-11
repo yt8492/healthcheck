@@ -121,3 +121,14 @@ GOOGLE_CLOUD_PROJECT=demo-healthcheck FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 POR
 Cloud Run向けに`Dockerfile`を用意しています。Serviceは`dist/api/server.js`、Jobは`dist/sync/cli.js sync`を実行します。実際のデプロイ、IAM権限の分離、Scheduler、Secret Managerへの登録は次の作業です。同期プロセスは`GOOGLE_HEALTH_CREDENTIAL_SECRET=projects/…/secrets/…/versions/latest`で`{client_id,client_secret,refresh_token}`のJSONを読み取れます。閲覧用プロセスにこの秘密への権限は必要ありません。
 
 実データによる値・時刻の照合は本人のOAuth接続とFirestore準備後に行います。Emulatorでの合格は、Google Health APIで本人のデータが取得できることの証明とは区別します。
+
+## ブランディング掲載用の文書
+
+- [プライバシーポリシー](PRIVACY_POLICY.md)
+- [利用規約](TERMS_OF_SERVICE.md)
+
+現行の心拍機能、運営者本人のデータの公開、一般の閲覧者のアカウント連携を受け付けない運用を前提にしています。取得指標や共有方法を追加する場合は、文書と連携時の説明を更新します。
+
+Google Auth Platformに登録する際は、Markdownを閲覧可能なウェブページとして公開し、ホームページと同じドメインの公開URLを指定します。ホームページからも両文書へのリンクを設けます。[Googleのブランディング掲載要件](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification#application_privacy_policy_link_requirements)
+
+公開準備では、連携前の健康データ取得・公開に関する説明と明示的な同意、ローカル環境を含む認証情報の保存時暗号化を確認します。現行のローカルOAuthファイル保存はJSONとファイル権限の制限であり、アプリによる暗号化は行っていません。文書の作成だけで公開要件への対応が完了するものではありません。[Google Health APIの同意・安全管理要件](https://developers.google.com/health/policies/health-api-developer-user-data-policy)
