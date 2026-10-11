@@ -127,6 +127,23 @@ Cloud Run向けに`Dockerfile`を用意しています。Serviceは`dist/api/ser
 - [プライバシーポリシー](PRIVACY_POLICY.md)
 - [利用規約](TERMS_OF_SERVICE.md)
 
+紹介ページと両文書は、GitHub Pagesで静的サイトとして公開します。
+
+| Google Auth Platformの設定 | 値 |
+| --- | --- |
+| ホームページ | `https://healthcheck.yt8492.com/` |
+| プライバシーポリシー | `https://healthcheck.yt8492.com/privacy/` |
+| 利用規約 | `https://healthcheck.yt8492.com/terms/` |
+| 承認済みドメイン | `yt8492.com` |
+
+`site/`には紹介ページ、共通レイアウト、CSS、ビルドスクリプトを配置しています。上記のルートMarkdownを原本とし、`npm run build:site`でHTMLに変換します。初回は`npm ci --prefix site`でサイト専用の依存関係を導入してください。ローカル確認は`python3 -m http.server 8788 --bind 127.0.0.1 --directory site/dist`で起動できます。
+
+GitHub Pagesの公開元は「GitHub Actions」です。`.github/workflows/pages.yml`が`main`上のサイト・文書の変更を検出し、`site/dist`だけを公開します。ダッシュボード、API、健康データ、OAuth設定ファイルは公開物に含めません。公開先のドメインはビルドスクリプトとGitHub PagesのCustom domainで指定します。
+
+Cloudflareでは`healthcheck`のCNAMEを`yt8492.github.io`へ向け、プロキシを「DNSのみ」、TTLを自動にします。既存の`yt8492.com`のサイトや他のDNSレコードは変更しません。GitHub Pages側で証明書が発行された後に「Enforce HTTPS」を有効にします。
+
+ブランディングの所有権確認は、Google Cloudプロジェクトの所有者アカウントでGoogle Search Consoleに`yt8492.com`のドメインプロパティを追加し、指定されたDNSのTXTレコードで行います。GitHub Pages側のDNS確認とGoogleの所有権確認は別の手続です。
+
 現行の心拍機能、運営者本人のデータの公開、一般の閲覧者のアカウント連携を受け付けない運用を前提にしています。取得指標や共有方法を追加する場合は、文書と連携時の説明を更新します。
 
 Google Auth Platformに登録する際は、Markdownを閲覧可能なウェブページとして公開し、ホームページと同じドメインの公開URLを指定します。ホームページからも両文書へのリンクを設けます。[Googleのブランディング掲載要件](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification#application_privacy_policy_link_requirements)

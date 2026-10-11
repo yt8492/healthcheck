@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="{{DESCRIPTION}}">
+    <meta name="theme-color" content="#254d3c">
+    <title>{{TITLE}}</title>
+    <link rel="canonical" href="{{CANONICAL}}">
+    <link rel="icon" href="{{ROOT}}favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="{{ROOT}}styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <div class="shell">
+      <header class="masthead">
+        <a class="brand" href="{{ROOT}}" aria-label="healthcheck ホーム">
+          <span class="brand-mark" aria-hidden="true">h<span>.</span></span>
+          <span>healthcheck</span>
+        </a>
+        <nav aria-label="メインナビゲーション">
+          <a href="{{ROOT}}privacy/">プライバシーポリシー</a>
+          <a href="{{ROOT}}terms/">利用規約</a>
+        </nav>
+      </header>
+      <main id="main" class="{{KIND}}" tabindex="-1">{{CONTENT}}</main>
+      <footer class="footer">
+        <div><span class="footer-brand">healthcheck</span><span>運営：マヤミト</span></div>
+        <nav aria-label="フッターナビゲーション">
+          <a href="{{ROOT}}privacy/">プライバシーポリシー</a>
+          <a href="{{ROOT}}terms/">利用規約</a>
+          <a href="mailto:contact@yt8492.com">お問い合わせ</a>
+        </nav>
+      </footer>
+    </div>
+  </body>
+</html>

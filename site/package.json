@@ -1,0 +1,14 @@
+{
+  "name": "healthcheck-site",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "marked": "18.1.0"
+  }
+}
