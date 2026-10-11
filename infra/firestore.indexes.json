@@ -1,0 +1,6 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "seriesHourly", "fieldPath": "points", "indexes": [] }
+  ]
+}

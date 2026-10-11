@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.cache/
+.local/
+.env
+.env.*
+!.env.example
+*-debug.log
+*.log
+test-results/
+playwright-report/
+.DS_Store

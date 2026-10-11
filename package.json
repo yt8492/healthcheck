@@ -1,0 +1,55 @@
+{
+  "name": "healthcheck",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "tsx --env-file-if-exists=.env scripts/dev.ts",
+    "dev:api": "tsx --env-file-if-exists=.env apps/api/src/server.ts",
+    "dev:web": "vite --config apps/web/vite.config.ts",
+    "build": "node scripts/build.mjs",
+    "start": "node --env-file-if-exists=.env dist/api/server.js",
+    "check": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:emulator": "tsx scripts/emulator-test.ts",
+    "test:e2e": "playwright test",
+    "emulator": "tsx scripts/emulator.ts",
+    "seed:emulator": "tsx scripts/seed-emulator.ts",
+    "connect": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts connect",
+    "sync:heart": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts sync",
+    "prune": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts prune"
+  },
+  "dependencies": {
+    "@fastify/compress": "9.2.1",
+    "@fastify/static": "10.1.6",
+    "@google-cloud/firestore": "9.3.1",
+    "@google-cloud/secret-manager": "7.1.1",
+    "echarts": "6.1.0",
+    "fastify": "5.12.5",
+    "google-auth-library": "11.2.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "esbuild": "0.28.2",
+    "firebase-tools": "15.33.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}
