@@ -7,6 +7,20 @@ info:
     fromは含みtoは含まない。90日以内、分境界、最大4096分。
     avgは有効な1分平均の算術平均で、元センサーのサンプル数による加重平均ではない。
 paths:
+  /api/v1/health:
+    get:
+      summary: プロセスの稼働確認
+      description: DBへの接続や同期の成功は確認しない
+      responses:
+        '200':
+          description: 起動済み
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { const: true }
   /api/v1/timeseries:
     get:
       summary: 心拍の1分値と期間の統計

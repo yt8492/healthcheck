@@ -1,0 +1,12 @@
+[
+  {
+    "name": "delete-older-images",
+    "action": { "type": "Delete" },
+    "condition": { "tagState": "any", "olderThan": "86400s" }
+  },
+  {
+    "name": "keep-latest-two",
+    "action": { "type": "Keep" },
+    "mostRecentVersions": { "packageNamePrefixes": ["healthcheck"], "keepCount": 2 }
+  }
+]

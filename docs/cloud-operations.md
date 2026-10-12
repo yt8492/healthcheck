@@ -1,0 +1,103 @@
+# クラウド運用
+
+既存Firestore Native DBと同じリージョンに、心拍のダッシュボード・読み取りAPIと定期同期を配置する。公開範囲は1分の平均・最小・最大と日時、同期状態。睡眠など未実装の指標は含まない。
+
+## 構成と権限
+
+| リソース | 設定・用途 |
+| --- | --- |
+| Cloud Run Service `healthcheck` | 公開HTTPS、1 vCPU / 512 MiB、リクエスト単位課金、Service全体とRevisionの最小0 / 最大1、同時リクエスト40、リクエスト上限30秒 |
+| Cloud Run Job `healthcheck-sync` | 非公開、1タスク・並列1、1 vCPU / 512 MiB、上限540秒、タスク再試行0、48時間再取得後に90日超を削除 |
+| Cloud Scheduler `healthcheck-sync-every-15m` | `*/15 * * * *`、Asia/Tokyo、Google Cloud APIへのOAuth認証付きPOST、受付の再試行0 |
+| Secret `healthcheck-google-health-oauth` | DBと同じリージョンで管理する、本人の接続済みOAuth JSON。同期Jobだけが読み取る |
+| Artifact Registry `healthcheck` | 同じdigestのイメージをServiceとJobに使用。最新2世代を保持、他は1日以上経過後に削除 |
+| Cloud Storage `PROJECT_ID-healthcheck-build-source` | 非公開のビルドソース一時置場。1日経過後に削除対象。健康データを置かない |
+
+| サービスアカウント | 付与する権限 |
+| --- | --- |
+| `healthcheck-api` | 対象プロジェクトの`roles/datastore.viewer` |
+| `healthcheck-sync` | 対象プロジェクトの`roles/datastore.user`、対象Secretの`roles/secretmanager.secretAccessor` |
+| `healthcheck-scheduler` | 同期Jobだけの`roles/run.invoker` |
+| `healthcheck-build` | ビルドソースBucketの`roles/storage.objectViewer`、対象Repositoryの`roles/artifactregistry.writer`、プロジェクトの`roles/logging.logWriter` |
+
+サービスアカウントの鍵ファイルは作らない。Firestoreのクライアント用ルールは`infra/firestore.rules`と同じ、全読み書き拒否であることを公開前に確認する。サーバーはIAMでアクセスする。`points`のインデックスを無効化して書き込み・容量を抑える。SchedulerにJobの設定変更・Secret参照・Firestore操作の権限は与えない。
+
+## 初回公開・再デプロイ
+
+Node.js 24、npm、ログイン済みGoogle Cloud CLI、対象プロジェクトのオーナー権限、Cloud Billingが必要。既存DBの配置に合わせて指定する。
+
+```sh
+npm ci
+npm run check
+npm test
+npm run build
+npm run cloud:deploy -- --project YOUR_PROJECT_ID --region asia-northeast1
+```
+
+初回は`.local/google-health-tokens.json`を必要とする。別の場所にある場合は`--token-file /absolute/path/token.json`を指定する。認証情報は`gcloud secrets versions add --data-file`から直接登録し、引数・ログ・ビルドソースに展開しない。既存の有効なSecretバージョンがある更新では、Secretを再登録しない。
+
+デプロイは既存リソースを名前で再利用する。実行途中で失敗した場合は、原因を修正して同じコマンドで再開できる。ビルド成功後の設定だけをやり直す場合は`--image asia-northeast1-docker.pkg.dev/YOUR_PROJECT_ID/healthcheck/healthcheck@sha256:DIGEST`を追加すると、そのイメージから再開する。初回同期が失敗した場合は定期起動を新規作成せず停止する。作成済みの定期起動がある再デプロイでは、その状態を保持する。
+
+ServiceとJobは同じイメージdigestを使用する。`cloud:deploy`の出力にHTTPS URLが表示される。GitHub Pagesの紹介サイトは独立しているため、このコマンドはGitHubやそのDNSを変更しない。
+
+## 同期の確認
+
+`YOUR_PROJECT_ID`と`PUBLIC_URL`は実際の値に置き換える。公開APIの正常応答は30秒キャッシュされる場合がある。
+
+```sh
+gcloud scheduler jobs describe healthcheck-sync-every-15m --project=YOUR_PROJECT_ID --location=asia-northeast1
+gcloud scheduler jobs run healthcheck-sync-every-15m --project=YOUR_PROJECT_ID --location=asia-northeast1
+gcloud run jobs executions list --job=healthcheck-sync --project=YOUR_PROJECT_ID --region=asia-northeast1
+curl --fail PUBLIC_URL/api/v1/status
+curl --fail PUBLIC_URL/api/v1/health
+```
+
+Schedulerの成功はCloud Run APIが起動要求を受け付けたことを示す。同期成功は、その後のExecutionの`Completed=True`と、公開`status`の`lastSuccessAt`更新・`error=null`で確認する。`dataThrough`は測定値の最新日時で、同期時刻とは違う。端末からの反映待ちや未装着では、同期成功でも測定日時が進まないことがある。
+
+稼働確認は`/api/v1/health`を使う。`/healthz`はこのCloud Runの公開経路ではアプリに届かず404となったため、ローカル用として残している。稼働確認の200はプロセスの起動を示すもので、DBの読み取りや同期成功を示すものではない。
+
+手動で完了まで待つ場合:
+
+```sh
+gcloud run jobs execute healthcheck-sync --project=YOUR_PROJECT_ID --region=asia-northeast1 --wait
+```
+
+上流APIの429・5xxはジョブ内部で有限回再試行する。ジョブ自体とSchedulerは追加の再試行を行わず、次回の15分実行に委ねる。期限付きロックで保存処理の重複を防ぐ。Jobの540秒上限はロックの10分より短い。
+
+## 停止・再開・OAuth再接続
+
+```sh
+gcloud scheduler jobs pause healthcheck-sync-every-15m --project=YOUR_PROJECT_ID --location=asia-northeast1
+gcloud scheduler jobs resume healthcheck-sync-every-15m --project=YOUR_PROJECT_ID --location=asia-northeast1
+```
+
+OAuthの`reauth-required`では保存済みデータの配信が続く。ローカルで本人が再接続し、Secretを更新してから実行確認する。
+
+```sh
+npm run connect
+npm run cloud:credentials -- --project YOUR_PROJECT_ID --region asia-northeast1
+gcloud run jobs execute healthcheck-sync --project=YOUR_PROJECT_ID --region=asia-northeast1 --wait
+```
+
+Jobは毎回`versions/latest`を読み取るため、Secret更新だけで新しい認証情報が次の実行に使われる。Secretの古いバージョンは自動削除しない。再接続後の同期成功を確認してから不要なバージョンを無効化する。Secret Managerの無料枠は有効バージョン数も対象となる。
+
+External / Testingで発行したrefresh tokenは、このスコープでは原則7日で期限切れとなる。継続運用には公開ステータスとトークンの発行条件を確認し、必要なら公開設定後に再接続する。[Google OAuthの期限](https://developers.google.com/identity/protocols/oauth2#expiration)
+
+## ロールバック
+
+以前の正常なService RevisionとJobのイメージdigestを記録しておく。Artifact Registryは最新2世代を保持するため、必要な世代はクリーンアップ対象を確認する。
+
+```sh
+gcloud run services update-traffic healthcheck --to-revisions=PREVIOUS_REVISION=100 --project=YOUR_PROJECT_ID --region=asia-northeast1
+gcloud run jobs update healthcheck-sync --image=PREVIOUS_IMAGE_DIGEST --project=YOUR_PROJECT_ID --region=asia-northeast1
+```
+
+戻す前にSchedulerを一時停止し、Jobの確認後に再開する。コンテナのロールバックはFirestoreのデータを巻き戻さない。
+
+## 使用量と費用
+
+15分ごとは1日96回。30日・1 vCPUで各実行が1分以内なら、Jobの最低課金時間からCPUは172,800 vCPU秒、メモリは86,400 GiB秒になる。無料枠は請求先アカウント内で他プロジェクトとも共有される。実行が1分を超える、リトライが増える、アクセスが増える場合には費用が増える。[Cloud Runの料金](https://cloud.google.com/run/pricing)
+
+最小インスタンス0、リクエスト単位課金で待機費用を抑える。最大1は急な拡張を抑える設定で、総費用の上限を保証するものではない。インスタンス内の30秒キャッシュは同じ期間のDB読み取りを共有するが、任意期間の要求やコールドスタートでは新しい読み取りが生じる。
+
+Cloud Build、イメージ保存、ビルドソース保存、Secret、Scheduler、Firestore、インターネット配信の使用量も別途確認する。Cloud Storageのリージョン別無料枠とCloud Runの無料枠は同一ではない。常時稼働のVM、ロードバランサー、CDNはこの構成には含めない。

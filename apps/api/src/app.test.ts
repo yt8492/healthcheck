@@ -8,6 +8,12 @@ const store: ReadStore = { emulator: true, state: async () => blankState(), read
 async function setup(input = store) { const app = await createApp(input, { now: () => now, staticRoot: '/does-not-exist' }); apps.push(app); return app; }
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 describe('公開API', () => {
+  it('稼働確認はDB障害時にもプロセスの起動を確認できる', async () => {
+    const fail = async () => { throw new Error('database unavailable'); };
+    const app = await setup({ emulator: false, read: fail, state: fail });
+    const response = await app.inject('/api/v1/health');
+    expect(response.statusCode).toBe(200); expect(response.json()).toEqual({ ok: true });
+  });
   it('未同期を空白の1440分と状態で返す。0を作らない', async () => {
     const res = await (await setup()).inject('/api/v1/timeseries');
     const body = res.json();

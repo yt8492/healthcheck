@@ -1,6 +1,6 @@
 # Healthcheck
 
-Google Health APIから本人の心拍を取得し、Firestoreに1分の平均・最小・最大を90日保存する公開APIとダッシュボード。現在の到達点は心拍の同期・保存・24時間表示です。睡眠・活動・日別生体指標、長期間の表示用集計、定期実行、クラウド公開は次の到達点で追加します。
+Google Health APIから本人の心拍を取得し、Firestoreに1分の平均・最小・最大を90日保存する公開APIとダッシュボード。心拍の同期・保存・24時間表示と、Cloud Runへの公開・15分ごとの定期同期に対応しています。睡眠・活動・日別生体指標、長期間の表示用集計は今後追加します。
 
 ## ローカル起動
 
@@ -97,11 +97,11 @@ Google Health APIの`rollUp`に`windowSize: "60s"`を指定し、全ページの
 | `/api/v1/timeseries?metric=heart-rate&from=…&to=…&resolution=1m` | 欠損を含む1分値、単位、集計方法、期間統計、同期状態 |
 | `/api/v1/summary?from=…&to=…` | 期間平均・最小・最大、取得できた分数、期間内の最新測定 |
 | `/api/v1/status` | 最終同期成功と最新測定日時を分けて返す |
-| `/healthz` | プロセスの稼働確認 |
+| `/api/v1/health` | プロセスの稼働確認。`/healthz`はローカル互換用 |
 
 日時はタイムゾーン付きRFC 3339、分境界、開始を含む・終了を含まない指定。日時を省略すると直近24時間。1回は最大4,096分、測定から90日以内。`resolution=auto`もこの段階では1mです。不正入力は400、DB障害は503。90日を超えた値は削除ジョブが停止していてもAPIから返しません。読み取りAPIのログインは不要です。
 
-機械可読な契約は`docs/openapi.yaml`にあります。API成功応答は30秒間キャッシュでき、エラー応答はキャッシュしません。
+機械可読な契約は`docs/openapi.yaml`にあります。API成功応答は30秒間キャッシュでき、エラー応答はキャッシュしません。同じCloud Runインスタンスでは、同期状態と同じ期間のFirestore読み取りも30秒間共有します。並行要求をまとめ、失敗は保持せず、期間のキャッシュは最大16件です。
 
 ## 検証・ビルド
 
@@ -118,9 +118,21 @@ npm run build
 GOOGLE_CLOUD_PROJECT=demo-healthcheck FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 PORT=3001 npm start
 ```
 
-Cloud Run向けに`Dockerfile`を用意しています。Serviceは`dist/api/server.js`、Jobは`dist/sync/cli.js sync`を実行します。実際のデプロイ、IAM権限の分離、Scheduler、Secret Managerへの登録は次の作業です。同期プロセスは`GOOGLE_HEALTH_CREDENTIAL_SECRET=projects/…/secrets/…/versions/latest`で`{client_id,client_secret,refresh_token}`のJSONを読み取れます。閲覧用プロセスにこの秘密への権限は必要ありません。
+Cloud Run向けに`Dockerfile`を用意しています。Serviceは`dist/api/server.js`、Jobは`dist/sync/cli.js sync`を実行します。同期プロセスは`GOOGLE_HEALTH_CREDENTIAL_SECRET=projects/…/secrets/…/versions/latest`で`{client_id,client_secret,refresh_token}`のJSONを読み取ります。閲覧用プロセスはFirestoreの読み取り専用で、この秘密への権限を持ちません。
 
 実データによる値・時刻の照合は本人のOAuth接続とFirestore準備後に行います。Emulatorでの合格は、Google Health APIで本人のデータが取得できることの証明とは区別します。
+
+## クラウド公開と定期同期
+
+Google Cloud CLIで対象プロジェクトのオーナーとしてログインし、Firestore Native DB、Cloud Billing、本人の接続済みOAuth JSONを用意します。接続先は`.env`やCLIの既定プロジェクトに任せず、毎回`--project`で指定します。
+
+```sh
+npm run cloud:deploy -- --project YOUR_PROJECT_ID --region asia-northeast1
+```
+
+APIの有効化、専用サービスアカウントと権限、認証情報のSecret登録、コンテナビルド、Service/Jobのデプロイ、初回同期の完了確認、15分ごとのScheduler設定を行い、公開URLを出力します。既存DBと異なるリージョンは拒否します。公開範囲は現在の心拍APIとダッシュボードです。
+
+ビルドに送るソースは`.gcloudignore`で限定し、OAuthの実際の値が含まれないか送信前に検査します。Cloud Storageにはビルド用のソースを一時配置して1日経過後に削除します。心拍データやOAuth JSONをビルド用Storageへ送ることはありません。詳しい確認・停止・再接続・ロールバック手順は[クラウド運用](./docs/cloud-operations.md)にあります。
 
 ## ブランディング掲載用の文書
 

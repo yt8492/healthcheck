@@ -109,6 +109,6 @@ export function App() {
 
       <section className="record-note"><div className="note-icon" aria-hidden="true">i</div><div><h2>記録について</h2><p>Googleのウェアラブルデバイスから取得した、1分ごとの平均・最小・最大です。未装着や未取得の時間は欠損として表示します。</p><p>測定から90日間保存します。デバイスからの反映には時間差があります。</p></div></section>
     </main>
-    <footer><span>healthcheck</span><span>公開された心拍の記録 · Google Health API</span><a href={`/api/v1/timeseries?${new URLSearchParams({ ...range, metric: 'heart-rate', resolution: '1m' })}`}>この期間のJSON ↗</a></footer>
+    <footer><a href="https://healthcheck.yt8492.com/">healthcheckについて</a><a href="https://healthcheck.yt8492.com/privacy/">プライバシーポリシー</a><a href="https://healthcheck.yt8492.com/terms/">利用規約</a><a href={`/api/v1/timeseries?${new URLSearchParams({ ...range, metric: 'heart-rate', resolution: '1m' })}`}>この期間のJSON ↗</a></footer>
   </div>;
 }

@@ -1,0 +1,22 @@
+# Cloud Buildに送るファイルをビルドに必要なものだけに限定する。
+*
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!.npmrc
+!tsconfig.json
+!apps/
+!apps/**
+!packages/
+!packages/**
+!scripts/
+scripts/*
+!scripts/build.mjs
+!infra/
+infra/*
+!infra/cloudbuild.yaml
+**/*.test.ts
+**/*.test.tsx
+**/.env*
+**/node_modules/**

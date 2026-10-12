@@ -4,12 +4,14 @@ import serveStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { AGGREGATION, InputError, publicStatus, recentRange, summarize, validateRange, type HeartPoint, type SyncState, type TimeRange } from '@healthcheck/core';
+import { cacheReads } from './cache.js';
 
 export type ReadStore = { emulator: boolean; state(): Promise<SyncState>; read(range: TimeRange): Promise<HeartPoint[]> };
 
-export async function createApp(store: ReadStore, options: { now?: () => number; staticRoot?: string; logger?: boolean } = {}) {
+export async function createApp(source: ReadStore, options: { now?: () => number; staticRoot?: string; logger?: boolean } = {}) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }) });
   const clock = options.now ?? Date.now;
+  const store = cacheReads(source, clock);
   await app.register(compress);
   app.addHook('onSend', async (req, reply) => {
     reply.header('x-content-type-options', 'nosniff').header('referrer-policy', 'no-referrer');
@@ -30,6 +32,7 @@ export async function createApp(store: ReadStore, options: { now?: () => number;
     return validateRange(q.from, q.to, clock());
   }
   app.get('/healthz', async () => ({ ok: true }));
+  app.get('/api/v1/health', async () => ({ ok: true }));
   app.get('/api/v1/status', async () => publicStatus(await store.state(), clock(), store.emulator));
   app.get('/api/v1/timeseries', async req => {
     const range = rangeOf(req.query);
