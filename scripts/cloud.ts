@@ -160,11 +160,13 @@ async function main() {
     '--role=roles/secretmanager.secretAccessor', '--format=none']);
   const versions = json<{ state: string }[]>(['secrets', 'versions', 'list', secret]);
   if (!versions.some(version => version.state === 'ENABLED')) await uploadCredentials();
-  const field = json<{ indexConfig?: { usesAncestorConfig?: boolean; indexes?: unknown[] } }>([
-    'firestore', 'indexes', 'fields', 'describe', 'points', '--collection-group=seriesHourly', '--database=(default)',
-  ]);
-  if (field.indexConfig?.usesAncestorConfig || field.indexConfig?.indexes?.length) {
-    gcloud(['firestore', 'indexes', 'fields', 'update', 'points', '--collection-group=seriesHourly', '--database=(default)', '--disable-indexes']);
+  for (const [collection, fieldName] of [['seriesHourly', 'points'], ['sleepSessions', 'stages']] as const) {
+    const field = json<{ indexConfig?: { usesAncestorConfig?: boolean; indexes?: unknown[] } }>([
+      'firestore', 'indexes', 'fields', 'describe', fieldName, `--collection-group=${collection}`, '--database=(default)',
+    ]);
+    if (field.indexConfig?.usesAncestorConfig || field.indexConfig?.indexes?.length) {
+      gcloud(['firestore', 'indexes', 'fields', 'update', fieldName, `--collection-group=${collection}`, '--database=(default)', '--disable-indexes']);
+    }
   }
 
   let digest = values.image;

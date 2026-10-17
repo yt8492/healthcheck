@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
+import { normalizeSleep, type SleepSession } from '@healthcheck/core';
 import { MINUTE, SOURCE_FAMILY, emptyPoints, heartValueSchema, minuteTime, type HeartPoint, type TimeRange, type SyncErrorCode } from '@healthcheck/core';
 
 const ENDPOINT = 'https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:rollUp';
 export const HEART_SCOPE = 'https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly';
+export const SLEEP_SCOPE = 'https://www.googleapis.com/auth/googlehealth.sleep.readonly';
 export type AuthorizedFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 export class HealthApiError extends Error {
@@ -50,6 +53,39 @@ export class GoogleHealthClient {
     if (!z.object({ healthUserId: z.string().min(1) }).safeParse(body).success) {
       throw new HealthApiError('invalid-upstream-data', 'Google Healthの本人連携を確認できません。');
     }
+  }
+
+  // 上流は終了時刻 [from,to) で取得する。検索・表示の重なりとは別の契約。
+  async sleepSessions(range: TimeRange): Promise<SleepSession[]> {
+    const sessions = new Map<string, SleepSession>();
+    const seenTokens = new Set<string>();
+    let pageToken: string | undefined;
+    do {
+      const url = new URL('https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints:reconcile');
+      url.search = new URLSearchParams({ pageSize: '25', dataSourceFamily: SOURCE_FAMILY,
+        filter: `sleep.interval.end_time >= "${range.from}" AND sleep.interval.end_time < "${range.to}"`,
+        ...(pageToken ? { pageToken } : {}) }).toString();
+      const body = await this.call(url.toString(), { method: 'GET' });
+      const page = z.object({ dataPoints: z.array(z.object({ dataPointName: z.string().min(1), sleep: z.unknown() })).default([]),
+        nextPageToken: z.string().optional() }).safeParse(body);
+      if (!page.success) throw new HealthApiError('invalid-upstream-data', '睡眠のレスポンス形式が想定と異なります。');
+      for (const point of page.data.dataPoints) {
+        try {
+          if (!/^users\/[^/]+\/dataTypes\/sleep\/dataPoints\/[^/]+$/.test(point.dataPointName)) throw new Error('Invalid name');
+          // 本人識別子を含むリソース名は保存・公開しない。
+          const id = createHash('sha256').update(point.dataPointName).digest('hex');
+          const session = normalizeSleep(id, point.sleep);
+          if (session.endTime < range.from || session.endTime >= range.to || sessions.has(id)) throw new Error('Invalid range or duplicate');
+          sessions.set(id, session);
+        } catch { throw new HealthApiError('invalid-upstream-data', '睡眠の区間・段階・識別子の整合性を確認できません。'); }
+      }
+      pageToken = page.data.nextPageToken || undefined;
+      if (pageToken) {
+        if (seenTokens.has(pageToken) || seenTokens.size >= 1000) throw new HealthApiError('invalid-upstream-data', '睡眠のページングが完了しません。');
+        seenTokens.add(pageToken);
+      }
+    } while (pageToken);
+    return [...sessions.values()].sort((a, b) => a.endTime.localeCompare(b.endTime) || a.id.localeCompare(b.id));
   }
 
   async heartRate(range: TimeRange): Promise<HeartPoint[]> {

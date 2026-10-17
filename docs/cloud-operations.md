@@ -1,6 +1,6 @@
 # クラウド運用
 
-既存Firestore Native DBと同じリージョンに、心拍のダッシュボード・読み取りAPIと定期同期を配置する。公開範囲は1分の平均・最小・最大と日時、同期状態。睡眠など未実装の指標は含まない。
+既存Firestore Native DBと同じリージョンに、心拍・睡眠のダッシュボード・読み取りAPIと定期同期を配置する。心拍は1分の平均・最小・最大と日時、睡眠は開始・終了・時間・段階・覚醒を公開する。同期状態は指標別に返す。活動・日別生体指標は今後の追加対象。
 
 ## 構成と権限
 
@@ -21,7 +21,7 @@
 | `healthcheck-scheduler` | 同期Jobだけの`roles/run.invoker` |
 | `healthcheck-build` | ビルドソースBucketの`roles/storage.objectViewer`、対象Repositoryの`roles/artifactregistry.writer`、プロジェクトの`roles/logging.logWriter` |
 
-サービスアカウントの鍵ファイルは作らない。Firestoreのクライアント用ルールは`infra/firestore.rules`と同じ、全読み書き拒否であることを公開前に確認する。サーバーはIAMでアクセスする。`points`のインデックスを無効化して書き込み・容量を抑える。SchedulerにJobの設定変更・Secret参照・Firestore操作の権限は与えない。
+サービスアカウントの鍵ファイルは作らない。Firestoreのクライアント用ルールは`infra/firestore.rules`と同じ、全読み書き拒否であることを公開前に確認する。サーバーはIAMでアクセスする。`seriesHourly.points`と`sleepSessions.stages`のインデックスを無効化して書き込み・容量を抑える。SchedulerにJobの設定変更・Secret参照・Firestore操作の権限は与えない。
 
 ## 初回公開・再デプロイ
 
@@ -76,7 +76,7 @@ curl --fail PUBLIC_URL/api/v1/status
 curl --fail PUBLIC_URL/api/v1/health
 ```
 
-Schedulerの成功はCloud Run APIが起動要求を受け付けたことを示す。同期成功は、その後のExecutionの`Completed=True`と、公開`status`の`lastSuccessAt`更新・`error=null`で確認する。`dataThrough`は測定値の最新日時で、同期時刻とは違う。端末からの反映待ちや未装着では、同期成功でも測定日時が進まないことがある。
+Schedulerの成功はCloud Run APIが起動要求を受け付けたことを示す。全指標の同期成功は、その後のExecutionの`Completed=True`と、公開`status.metrics`の各指標で`lastSuccessAt`更新・`error=null`を確認する。ルートの状態は心拍の従来互換であり、睡眠の成功は示さない。部分失敗では片方が成功してもJobは終了コード1になる。`dataThrough`は心拍の最新測定日時、睡眠の最新終了日時で、同期時刻とは違う。
 
 稼働確認は`/api/v1/health`を使う。`/healthz`はこのCloud Runの公開経路ではアプリに届かず404となったため、ローカル用として残している。稼働確認の200はプロセスの起動を示すもので、DBの読み取りや同期成功を示すものではない。
 
@@ -98,7 +98,7 @@ gcloud scheduler jobs resume healthcheck-sync-every-15m --project=YOUR_PROJECT_I
 OAuthの`reauth-required`では保存済みデータの配信が続く。ローカルで本人が再接続し、Secretを更新してから実行確認する。
 
 ```sh
-npm run connect
+npm run connect -- --sleep
 npm run cloud:credentials -- --project YOUR_PROJECT_ID --region asia-northeast1
 gcloud run jobs execute healthcheck-sync --project=YOUR_PROJECT_ID --region=asia-northeast1 --wait
 ```

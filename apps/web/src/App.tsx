@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { recentRange, retentionStart, type TimeRange, type TimeseriesResponse } from '@healthcheck/core';
 import { dateOnly, dateTime, inputRange, rangeFromUrl, toInput } from './time.js';
+import { SleepPanel } from './SleepPanel.js';
 
 const HeartChart = lazy(() => import('./HeartChart.js'));
 
@@ -12,9 +13,10 @@ const errorMessages: Record<string, string> = {
   'storage-error': 'データの保存に失敗しました。',
 };
 const bpm = (value: number | null | undefined) => value == null ? '—' : value.toFixed(1);
-function setUrl(range: TimeRange, replace = false) {
+function setUrl(range: TimeRange, replace = false, clearSleep = false) {
   const url = new URL(location.href);
   url.searchParams.set('from', range.from); url.searchParams.set('to', range.to);
+  if (clearSleep) { url.searchParams.delete('sleepFrom'); url.searchParams.delete('sleepTo'); }
   history[replace ? 'replaceState' : 'pushState']({}, '', url);
 }
 
@@ -50,7 +52,7 @@ export function App() {
     return () => controller.abort();
   }, [range, reload]);
 
-  function choose(next: TimeRange) { setInputError(''); setRange(next); setUrl(next); }
+  function choose(next: TimeRange) { setInputError(''); setRange(next); setUrl(next, false, true); }
   function move(direction: number) {
     const duration = Date.parse(range.to) - Date.parse(range.from);
     const next = { from: new Date(Date.parse(range.from) + duration * direction).toISOString(), to: new Date(Date.parse(range.to) + duration * direction).toISOString() };
@@ -106,6 +108,8 @@ export function App() {
         <div className="chart-foot"><p><span className="gap-key" aria-hidden="true" />データのない分は線をつなぎません。</p><span>時刻はすべて日本時間</span></div>
         {data && hasData && <details className="data-table"><summary>最後の60分を表で確認する</summary><div className="table-wrap"><table><caption>選択期間の最後の60分。単位：bpm</caption><thead><tr><th>日時（JST）</th><th>平均</th><th>最小</th><th>最大</th></tr></thead><tbody>{data.points.slice(-60).map(point => <tr key={point.time}><td>{dateTime(point.time)}</td><td>{bpm(point.value?.avg)}</td><td>{bpm(point.value?.min)}</td><td>{bpm(point.value?.max)}</td></tr>)}</tbody></table></div></details>}
       </section>
+
+      <SleepPanel range={range} reload={reload} showHeart={choose} />
 
       <section className="record-note"><div className="note-icon" aria-hidden="true">i</div><div><h2>記録について</h2><p>Googleのウェアラブルデバイスから取得した、1分ごとの平均・最小・最大です。未装着や未取得の時間は欠損として表示します。</p><p>測定から90日間保存します。デバイスからの反映には時間差があります。</p></div></section>
     </main>

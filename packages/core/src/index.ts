@@ -1,4 +1,5 @@
 import { z } from 'zod';
+export * from './sleep.js';
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -16,11 +17,12 @@ export type SyncState = {
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;
   lastRange: TimeRange | null;
+  completedRanges?: TimeRange[];
   dataThrough: string | null;
   error: { code: SyncErrorCode; at: string } | null;
 };
 export type PublicStatus = SyncState & {
-  metric: 'heart-rate';
+  metric: 'heart-rate' | 'sleep';
   environment: 'emulator' | 'production';
   sourceFamily: string;
   state: 'not-synced' | 'ok' | 'delayed' | 'error';
@@ -113,9 +115,10 @@ export function blankState(): SyncState {
   return { lastAttemptAt: null, lastSuccessAt: null, lastRange: null, dataThrough: null, error: null };
 }
 
-export function publicStatus(state: SyncState, now: number, emulator: boolean): PublicStatus {
+export function publicStatus(state: SyncState, now: number, emulator: boolean, metric: PublicStatus['metric'] = 'heart-rate'): PublicStatus {
   const condition = state.error ? 'error' : !state.lastSuccessAt ? 'not-synced'
     : now - Date.parse(state.lastSuccessAt) > HOUR ? 'delayed' : 'ok';
-  return { ...state, metric: 'heart-rate', environment: emulator ? 'emulator' : 'production',
+  const dataThrough = state.dataThrough && Date.parse(state.dataThrough) > now - RETENTION_DAYS * DAY ? state.dataThrough : null;
+  return { ...state, dataThrough, metric, environment: emulator ? 'emulator' : 'production',
     sourceFamily: SOURCE_FAMILY, state: condition, retentionDays: RETENTION_DAYS };
 }

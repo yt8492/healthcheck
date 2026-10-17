@@ -1,6 +1,7 @@
 {
   "indexes": [],
   "fieldOverrides": [
-    { "collectionGroup": "seriesHourly", "fieldPath": "points", "indexes": [] }
+    { "collectionGroup": "seriesHourly", "fieldPath": "points", "indexes": [] },
+    { "collectionGroup": "sleepSessions", "fieldPath": "stages", "indexes": [] }
   ]
 }

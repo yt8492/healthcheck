@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
   title: Healthcheck API
-  version: 0.1.0
+  version: 0.2.0
   description: >-
-    本人が公開する心拍の1分集計値。現段階では心拍のみを扱う。
-    fromは含みtoは含まない。90日以内、分境界、最大4096分。
+    本人が公開する心拍の1分集計値と睡眠セッション。
+    fromは含みtoは含まない。90日以内、分境界。timeseriesは最大4096分、sleepとsummaryは最大90日。
     avgは有効な1分平均の算術平均で、元センサーのサンプル数による加重平均ではない。
 paths:
   /api/v1/health:
@@ -61,9 +61,46 @@ paths:
                       status: { $ref: '#/components/schemas/Status' }
         '400': { $ref: '#/components/responses/InvalidQuery' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/sleep:
+    get:
+      summary: 指定期間と重なる睡眠を終了日時・ID順に取得
+      description: >-
+        startTime < to かつ endTime > from。終了日時から90日を超えたセッションは返さない。
+        実際の開始・終了と全段階を返し、指定期間の境界で切り詰めない。
+        全ページを同じfrom/toで取得する。単位は分、短い覚醒と離床の重複は正規化済み。
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - name: cursor
+          in: query
+          description: 前の応答のnextCursor。指定期間に紐付く
+          schema: { type: string, maxLength: 1024 }
+      responses:
+        '200':
+          description: 未取得・データなしは空配列と指標別の同期状態
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [from, to, metric, unit, sessions, nextCursor, status, coverage]
+                properties:
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  metric: { const: sleep }
+                  unit: { const: minutes }
+                  sessions:
+                    type: array
+                    maxItems: 50
+                    items: { $ref: '#/components/schemas/SleepSession' }
+                  nextCursor: { type: [string, 'null'] }
+                  status: { $ref: '#/components/schemas/Status' }
+                  coverage: { $ref: '#/components/schemas/SleepCoverage' }
+        '400': { $ref: '#/components/responses/InvalidQuery' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/summary:
     get:
-      summary: 選択期間の平均・最小・最大・最新測定
+      summary: 心拍の期間統計と睡眠の日別内訳・同期状態
+      description: 睡眠の内訳は表示期間と重なる部分だけを集計し、元のセッションのJST起床日に対応付ける
       parameters:
         - $ref: '#/components/parameters/from'
         - $ref: '#/components/parameters/to'
@@ -77,9 +114,29 @@ paths:
                   - $ref: '#/components/schemas/Metadata'
                   - $ref: '#/components/schemas/Summary'
                   - type: object
-                    required: [status]
+                    required: [status, sleep]
                     properties:
                       status: { $ref: '#/components/schemas/Status' }
+                      sleep:
+                        allOf:
+                          - $ref: '#/components/schemas/SleepTotals'
+                          - type: object
+                            required: [sessionCount, days, unit, status, coverage]
+                            properties:
+                              sessionCount: { type: integer, minimum: 0 }
+                              unit: { const: minutes }
+                              status: { $ref: '#/components/schemas/Status' }
+                              coverage: { $ref: '#/components/schemas/SleepCoverage' }
+                              days:
+                                type: array
+                                items:
+                                  allOf:
+                                    - $ref: '#/components/schemas/SleepTotals'
+                                    - type: object
+                                      required: [date, sessionCount]
+                                      properties:
+                                        date: { type: string, format: date }
+                                        sessionCount: { type: integer, minimum: 1 }
         '400': { $ref: '#/components/responses/InvalidQuery' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/status:
@@ -90,7 +147,18 @@ paths:
           description: 取得成功
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Status' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Status'
+                  - type: object
+                    required: [metrics]
+                    properties:
+                      metrics:
+                        type: object
+                        required: [heart-rate, sleep]
+                        properties:
+                          heart-rate: { $ref: '#/components/schemas/Status' }
+                          sleep: { $ref: '#/components/schemas/Status' }
         '503': { $ref: '#/components/responses/Unavailable' }
 components:
   parameters:
@@ -143,7 +211,7 @@ components:
       type: object
       required: [metric, state, lastAttemptAt, lastSuccessAt, lastRange, dataThrough, error, environment, sourceFamily, retentionDays]
       properties:
-        metric: { const: heart-rate }
+        metric: { enum: [heart-rate, sleep] }
         state: { type: string, enum: [not-synced, ok, delayed, error] }
         lastAttemptAt: { type: [string, 'null'], format: date-time }
         lastSuccessAt: { type: [string, 'null'], format: date-time }
@@ -154,6 +222,15 @@ components:
               properties:
                 from: { type: string, format: date-time }
                 to: { type: string, format: date-time }
+        completedRanges:
+          type: array
+          description: 睡眠の終了日時フィルターで取得に成功した範囲の和集合。失敗した範囲は追加しない
+          items:
+            type: object
+            required: [from, to]
+            properties:
+              from: { type: string, format: date-time }
+              to: { type: string, format: date-time }
         dataThrough: { type: [string, 'null'], format: date-time }
         error:
           oneOf:
@@ -165,6 +242,54 @@ components:
         environment: { enum: [emulator, production] }
         sourceFamily: { const: users/me/dataSourceFamilies/google-wearables }
         retentionDays: { const: 90 }
+    SleepCoverage:
+      type: string
+      enum: [not-fetched, partial, fetched]
+      description: >-
+        最終同期成功時点の取得範囲。表示期間の開始から成功時点までの終了日時が取得済みならfetched。
+        表示期間後に終了するセッションも重なり検索の対象なので、to以降の取得も必要。
+        部分取得の空データは「記録なし」と確定しない。端末からの未反映や未提供を区別する値ではない。
+    SleepTotals:
+      type: object
+      required: [durationMinutes, asleepMinutes, stageMinutes]
+      properties:
+        durationMinutes: { type: number, minimum: 0 }
+        asleepMinutes:
+          type: [number, 'null']
+          minimum: 0
+          description: LIGHT・DEEP・REM・ASLEEPの合計。段階がすべて不明ならnull。unknownの時間は含まない
+        stageMinutes:
+          type: object
+          required: [awake, light, deep, rem, asleep, restless, unknown]
+          properties:
+            awake: { type: number, minimum: 0 }
+            light: { type: number, minimum: 0 }
+            deep: { type: number, minimum: 0 }
+            rem: { type: number, minimum: 0 }
+            asleep: { type: number, minimum: 0 }
+            restless: { type: number, minimum: 0 }
+            unknown: { type: number, minimum: 0 }
+    SleepSession:
+      allOf:
+        - $ref: '#/components/schemas/SleepTotals'
+        - type: object
+          required: [id, startTime, endTime, wakeDate, type, nap, stages]
+          properties:
+            id: { type: string, pattern: '^[a-f0-9]{64}$' }
+            startTime: { type: string, format: date-time }
+            endTime: { type: string, format: date-time }
+            wakeDate: { type: string, format: date, description: Asia/Tokyoの終了日 }
+            type: { enum: [stages, classic, unknown] }
+            nap: { type: [boolean, 'null'], description: 上流が区分を提供しなければnull }
+            stages:
+              type: array
+              items:
+                type: object
+                required: [startTime, endTime, type]
+                properties:
+                  startTime: { type: string, format: date-time }
+                  endTime: { type: string, format: date-time }
+                  type: { enum: [awake, light, deep, rem, asleep, restless, unknown] }
     Error:
       type: object
       required: [error]

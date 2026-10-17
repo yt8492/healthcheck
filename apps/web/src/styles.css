@@ -87,6 +87,30 @@ h2 { font-size: 17px; font-weight: 500; margin: 6px 0 7px; letter-spacing: .02em
 .loader { border: 2px solid #dce6d7; border-top-color: #6d936a; border-radius: 50%; width: 24px; height: 24px; animation: rotate 1s linear infinite; }
 @keyframes rotate { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loader { animation: none; } }
+.sleep-panel { margin-top: 24px; padding-bottom: 0; }
+.sleep-period { margin: 20px 0; font-size: 12px; }
+.sleep-presets, .sleep-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; }
+.sleep-legend { font-size: 11px; margin-bottom: 18px; }
+.sleep-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.sleep-legend i { width: 12px; height: 12px; }
+.sleep-color.awake { background: #a75e36; }
+.sleep-color.light { background: #a7bbc3; }
+.sleep-color.deep { background: #354c78; }
+.sleep-color.rem { background: #9077ab; }
+.sleep-color.asleep { background: #547565; }
+.sleep-color.restless { background: #aa9145; }
+.sleep-color.unknown { background: repeating-linear-gradient(45deg,#c4c9c4,#c4c9c4 3px,#f4f5f1 3px,#f4f5f1 6px); }
+.sleep-status, .sleep-overview, .sleep-session p, .sleep-days p { font-size: 12px; line-height: 1.9; margin: 12px 0; }
+.sleep-message { font-size: 13px; padding: 30px 0; line-height: 1.9; }
+.sleep-timeline { position: relative; height: 30px; background: #f4f6f2; border-radius: 4px; margin-top: 12px; }
+.sleep-timeline span { position: absolute; height: 100%; }
+.sleep-session, .sleep-days > details { padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.sleep-session summary, .sleep-days summary { max-width: 100%; line-height: 1.9; }
+.sleep-stack { display: flex; height: 18px; width: min(600px, 74vw); background: #f4f6f2; margin-top: 6px; }
+.sleep-days { max-height: 720px; overflow: auto; }
+.sleep-session .table-wrap { width: 100%; }
+.sleep-session table { min-width: 370px; }
+.sleep-panel .chart-foot { display: block; font-size: 11px; line-height: 1.9; }
 .chart-foot { border-top: 1px solid #edf0e9; padding: 15px 0 19px; display: flex; justify-content: space-between; gap: 14px; color: #95a08f; font-size: 10px; }
 .chart-foot p { display: flex; align-items: center; gap: 7px; }
 .gap-key { display: inline-block; width: 14px; border-top: 2px dashed #afbcaa; }

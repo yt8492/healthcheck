@@ -1,6 +1,6 @@
 # Healthcheck
 
-Google Health APIから本人の心拍を取得し、Firestoreに1分の平均・最小・最大を90日保存する公開APIとダッシュボード。心拍の同期・保存・24時間表示と、Cloud Runへの公開・15分ごとの定期同期に対応しています。睡眠・活動・日別生体指標、長期間の表示用集計は今後追加します。
+Google Health APIから本人の心拍・睡眠を取得し、Firestoreに90日保存する公開APIとダッシュボード。心拍は1分の平均・最小・最大と24時間表示、睡眠はセッション・段階・覚醒と最大90日の表示に対応しています。Cloud Runと15分ごとの定期同期を利用します。活動・日別生体指標、長期間の心拍集計は今後追加します。
 
 ## ローカル起動
 
@@ -28,12 +28,13 @@ GOOGLE_CLOUD_PROJECT=demo-healthcheck FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm
 
 ## 本人のデータを接続する
 
-以下の`YOUR_PROJECT_ID`は接続先のGoogle CloudプロジェクトIDに置き換えてください。Cloud IAM認証と、心拍の読み取りに使う本人のOAuth認証は別々に設定します。実際の設定はGitに含めない`.env`と`.local/`に保存します。
+以下の`YOUR_PROJECT_ID`は接続先のGoogle CloudプロジェクトIDに置き換えてください。Cloud IAM認証と、心拍・睡眠の読み取りに使う本人のOAuth認証は別々に設定します。実際の設定はGitに含めない`.env`と`.local/`に保存します。
 
 1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials)で対象プロジェクトを選び、Google Auth Platformのブランド情報・対象ユーザーを設定します。External / Testingの場合は本人をテストユーザーに追加します。
-2. データアクセスに次のスコープを追加します。今回の到達点では心拍の読み取りだけを要求します。
+2. データアクセスに次の読み取りスコープを追加します。睡眠を取得する前に、更新した紹介ページとプライバシーポリシーを公開し、本人が睡眠の保存・インターネット公開に同意してください。既存の心拍用トークンには睡眠権限がないため、睡眠を追加する場合は再接続が必要です。
 
-   `https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly`
+   - `https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly`（心拍）
+   - `https://www.googleapis.com/auth/googlehealth.sleep.readonly`（睡眠）
 
 3. OAuthクライアントを**ウェブアプリケーション**として作成し、「承認済みのリダイレクトURI」に以下を完全一致で登録します。JavaScript生成元は不要です。
 
@@ -57,9 +58,10 @@ gcloud firestore databases describe --project=YOUR_PROJECT_ID --database='(defau
 7. 本人のFitbitと連携したGoogleアカウントで接続します。コマンドに表示されるURLをブラウザで開いて同意してください。
 
 ```sh
-npm run connect
+npm run connect -- --sleep
+# 心拍だけを接続する場合は --sleep を省略
 # JSONを別の場所に置いた場合
-npm run connect -- --client /absolute/path/oauth-client.json
+npm run connect -- --sleep --client /absolute/path/oauth-client.json
 ```
 
 コールバックは127.0.0.1でのみ待ち受け、stateとPKCEを検証します。getIdentityによる連携確認に成功してから、選択したOAuthクライアント情報とrefresh tokenを`.local/google-health-tokens.json`へ権限0600で保存します。同期時にはこのファイルを使うため、`--client`で指定したクライアントとの組み合わせが保たれます。アクセス・refresh tokenや本人のIDはログに出しません。
@@ -95,13 +97,38 @@ Google Health APIの`rollUp`に`windowSize: "60s"`を指定し、全ページの
 | GET | 内容 |
 | --- | --- |
 | `/api/v1/timeseries?metric=heart-rate&from=…&to=…&resolution=1m` | 欠損を含む1分値、単位、集計方法、期間統計、同期状態 |
-| `/api/v1/summary?from=…&to=…` | 期間平均・最小・最大、取得できた分数、期間内の最新測定 |
+| `/api/v1/summary?from=…&to=…` | 心拍の期間統計と、`sleep`内に睡眠時間・段階内訳・JSTの起床日別集計・同期状態 |
+| `/api/v1/sleep?from=…&to=…&cursor=…` | 期間と重なる睡眠を終了日時・ID順に最大50件ずつ取得。詳細の開始・終了は実際の値 |
 | `/api/v1/status` | 最終同期成功と最新測定日時を分けて返す |
 | `/api/v1/health` | プロセスの稼働確認。`/healthz`はローカル互換用 |
 
 日時はタイムゾーン付きRFC 3339、分境界、開始を含む・終了を含まない指定。日時を省略すると直近24時間。1回は最大4,096分、測定から90日以内。`resolution=auto`もこの段階では1mです。不正入力は400、DB障害は503。90日を超えた値は削除ジョブが停止していてもAPIから返しません。読み取りAPIのログインは不要です。
 
 機械可読な契約は`docs/openapi.yaml`にあります。API成功応答は30秒間キャッシュでき、エラー応答はキャッシュしません。同じCloud Runインスタンスでは、同期状態と同じ期間のFirestore読み取りも30秒間共有します。並行要求をまとめ、失敗は保持せず、期間のキャッシュは最大16件です。
+
+## 睡眠の取得と表示
+
+睡眠の読み取りには`googlehealth.sleep.readonly`への追加同意が必要です。`connect --sleep`は取得・保存・公開について説明したうえで、心拍と睡眠の両権限が許可された場合だけ認証情報を置換します。文書の公開と本人の同意を終える前に、睡眠の取得を開始しないでください。
+
+```sh
+# 睡眠のみ。既定は終了日時が直近48時間、最大7日
+GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID npm run sync:sleep
+# 心拍と睡眠を指標別に実行。一方の失敗でも他方を進め、部分失敗時は終了コード1
+GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID npm run sync
+```
+
+睡眠は`dataPoints:reconcile`、`google-wearables`、最大25件で全ページを取得します。上流のフィルターは**終了日時が[from,to)**のセッションです。全ページが成功した範囲だけを置換し、その範囲の消失したセッションを削除します。日跨ぎの開始日時は変更しません。日時が訂正された同じIDのセッションは上書きし、再取得範囲外の訂正・削除は当該範囲を手動で再同期して反映します。90日を取り込む場合は最大7日ずつに分けて指定します。[上流の睡眠フィルター](https://developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints/list)
+
+- `sleepSessions/<不透明なID>`：開始・終了、JSTの起床日、昼寝の区分、正規化した段階と内訳。本人識別子を含む元のリソース名は保存しません。`stages`はインデックスから除外します。
+- `syncState/sleep`、`jobLease/sleep`：心拍とは独立した取得状態とロック。成功した取得範囲は`completedRanges`へ結合し、空でも取得済みとして記録します。権限・通信・保存の失敗は既存値と成功時刻を保持します。APIの`coverage`と画面で未取得・一部取得・取得済みを区別します。表示期間後に終了する睡眠も必要なので、取得済みの判定には表示開始から最終成功時点までの終了日時範囲を使います。
+- 短い覚醒・離床は和集合を取り、主段階を分割して覚醒として1回だけ計上します。`ASLEEP`と`LIGHT/DEEP/REM`を睡眠、`RESTLESS`を別区分とし、未提供の段階は`unknown`です。段階が一切不明なら睡眠時間は`null`です。上流の丸め済みsummaryを加算せず、正規化した区間長から計算します。
+- 公開APIは`startTime < to && endTime > from`の重なりで検索します。睡眠とsummaryは直近90日までの期間に対応します。睡眠は50件固定のページングで、`nextCursor`が`null`になるまで**同じfrom/to**で取得します。cursorは期間に紐付きます。心拍のtimeseriesは従来どおり最大4,096分です。
+- summaryの睡眠内訳は表示期間との重なりだけを計算し、日別の対応付けは元セッションのJST起床日を使います。睡眠APIの詳細はセッション全体の実際の開始・終了・段階です。
+- 睡眠の保存期限は**終了日時から90日**です。期限を過ぎたセッションはAPIで除外し、同期・削除処理で物理削除します。開始だけが期限より前のセッションは詳細を保ちます。
+
+画面には睡眠専用の24時間・7日・30日・90日と任意期間があります。短期間は段階のタイムライン、長期間は起床日別の時間・段階内訳を表示します。表示期間はURLの`sleepFrom`/`sleepTo`に保存し、全ページ取得後に集計します。詳細の「この睡眠前後の心拍を見る」で、前後を含む最大24時間の心拍へ移動します。未取得、取得失敗、同期遅延、段階未提供を区別し、データのない理由を未装着と断定しません。
+
+取得仕様と本人データとの照合手順は[睡眠の検証](./docs/sleep-validation.md)にあります。
 
 ## 検証・ビルド
 
@@ -130,7 +157,7 @@ Google Cloud CLIで対象プロジェクトのオーナーとしてログイン�
 npm run cloud:deploy -- --project YOUR_PROJECT_ID --region asia-northeast1
 ```
 
-APIの有効化、専用サービスアカウントと権限、認証情報のSecret登録、コンテナビルド、Service/Jobのデプロイ、初回同期の完了確認、15分ごとのScheduler設定を行い、公開URLを出力します。既存DBと異なるリージョンは拒否します。公開範囲は現在の心拍APIとダッシュボードです。
+APIの有効化、専用サービスアカウントと権限、認証情報のSecret登録、コンテナビルド、Service/Jobのデプロイ、初回同期の完了確認、15分ごとのScheduler設定を行い、公開URLを出力します。既存DBと異なるリージョンは拒否します。公開範囲は心拍・睡眠APIとダッシュボードです。既存Secretが心拍だけの場合は、再接続後に`cloud:credentials`で睡眠権限付きの認証情報を登録してから更新します。
 
 ビルドに送るソースは`.gcloudignore`で限定し、OAuthの実際の値が含まれないか送信前に検査します。Cloud Storageにはビルド用のソースを一時配置して1日経過後に削除します。心拍データやOAuth JSONをビルド用Storageへ送ることはありません。詳しい確認・停止・再接続・ロールバック手順は[クラウド運用](./docs/cloud-operations.md)にあります。
 
@@ -162,7 +189,7 @@ Firebase Hostingに`health.yt8492.com`をカスタムドメインとして追加
 
 ブランディングの所有権確認は、Google Cloudプロジェクトの所有者アカウントでGoogle Search Consoleに`yt8492.com`のドメインプロパティを追加し、指定されたDNSのTXTレコードで行います。Hosting側のドメイン確認とSearch Consoleの所有権確認は別の手続です。
 
-現行の心拍機能、運営者本人のデータの公開、一般の閲覧者のアカウント連携を受け付けない運用を前提にしています。取得指標や共有方法を追加する場合は、文書と連携時の説明を更新します。
+現行の心拍・睡眠機能、運営者本人のデータの公開、一般の閲覧者のアカウント連携を受け付けない運用を前提にしています。取得指標や共有方法を追加する場合は、文書と連携時の説明を更新します。
 
 Google Auth Platformに登録する際は、Markdownを閲覧可能なウェブページとして公開し、ホームページと同じドメインの公開URLを指定します。ホームページからも両文書へのリンクを設けます。[Googleのブランディング掲載要件](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification#application_privacy_policy_link_requirements)
 

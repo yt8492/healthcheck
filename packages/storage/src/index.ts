@@ -1,22 +1,18 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { Firestore, type DocumentSnapshot, type Transaction } from '@google-cloud/firestore';
+import { createHash } from 'node:crypto';
+import { Firestore, type DocumentSnapshot } from '@google-cloud/firestore';
 import { z } from 'zod';
 import { HOUR, MINUTE, SOURCE_FAMILY, blankState, emptyPoints, heartValueSchema, hourStarts, retentionStart,
-  type HeartPoint, type HeartValue, type SyncState, type SyncErrorCode, type TimeRange } from '@healthcheck/core';
+  type HeartPoint, type HeartValue, type SyncState, type TimeRange } from '@healthcheck/core';
 
 const hourSchema = z.object({
   schemaVersion: z.literal(1), metric: z.literal('heart-rate'), hourStart: z.string(),
   points: z.array(heartValueSchema.nullable()).length(60), sourceFamily: z.literal(SOURCE_FAMILY),
   contentHash: z.string(), updatedAt: z.string(),
 });
-const stateSchema = z.object({
-  lastAttemptAt: z.string().nullable(), lastSuccessAt: z.string().nullable(),
-  lastRange: z.object({ from: z.string(), to: z.string() }).nullable(), dataThrough: z.string().nullable(),
-  error: z.object({ code: z.enum(['reauth-required', 'access-denied', 'upstream-unavailable', 'invalid-upstream-data', 'storage-error']), at: z.string() }).nullable(),
-});
-const LEASE_MS = 10 * 60_000;
-export class LeaseBusyError extends Error { constructor() { super('別の心拍同期が実行中です。'); } }
-export class LeaseExpiredError extends Error { constructor() { super('同期ロックの有効期限が切れました。保存は更新していません。'); } }
+import { MetricStore } from './metric.js';
+import { SleepStore } from './sleep.js';
+export { SleepStore } from './sleep.js';
+export { LeaseBusyError, LeaseExpiredError } from './metric.js';
 
 export function hourId(hour: string): string { return `heart-rate_${hour}`; }
 function hash(points: (HeartValue | null)[]): string { return createHash('sha256').update(JSON.stringify(points)).digest('hex'); }
@@ -27,18 +23,9 @@ function readHour(doc: DocumentSnapshot): (HeartValue | null)[] {
   return value.points;
 }
 
-export class HeartStore {
-  readonly emulator: boolean;
-  constructor(readonly db: Firestore, private readonly clock = Date.now) {
-    this.emulator = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
-  }
-  private stateRef() { return this.db.doc('syncState/heart-rate'); }
-  private leaseRef() { return this.db.doc('jobLease/heart-rate'); }
-
-  async state(): Promise<SyncState> {
-    const doc = await this.stateRef().get();
-    return doc.exists ? stateSchema.parse(doc.data()) : blankState();
-  }
+export class HeartStore extends MetricStore {
+  constructor(db: Firestore, clock = Date.now) { super(db, clock, 'heart-rate'); }
+  get sleep(): SleepStore { return new SleepStore(this.db, this.clock); }
 
   async read(range: TimeRange): Promise<HeartPoint[]> {
     const refs = hourStarts(range).map(hour => this.db.doc(`seriesHourly/${hourId(hour)}`));
@@ -48,23 +35,6 @@ export class HeartStore {
       const ms = Date.parse(point.time), start = Math.floor(ms / HOUR) * HOUR;
       return { time: point.time, value: hours.get(hourId(new Date(start).toISOString()))?.[(ms - start) / MINUTE] ?? null };
     });
-  }
-
-  async acquire(): Promise<string> {
-    const owner = randomUUID(), now = this.clock();
-    await this.db.runTransaction(async tx => {
-      const [lock, state] = await tx.getAll(this.leaseRef(), this.stateRef());
-      if (!lock || !state) throw new Error('同期状態を読み取れません。');
-      if (lock.exists && Number(lock.get('expiresAt')) > now) throw new LeaseBusyError();
-      tx.set(this.leaseRef(), { owner, expiresAt: now + LEASE_MS });
-      tx.set(this.stateRef(), { ...blankState(), ...state.data(), lastAttemptAt: new Date(now).toISOString() });
-    });
-    return owner;
-  }
-
-  private async checkLease(tx: Transaction, owner: string) {
-    const doc = await tx.get(this.leaseRef());
-    if (!doc.exists || doc.get('owner') !== owner || Number(doc.get('expiresAt')) <= this.clock()) throw new LeaseExpiredError();
   }
 
   async replace(range: TimeRange, points: HeartPoint[], owner: string): Promise<{ changedHours: number; availableMinutes: number }> {
@@ -125,17 +95,6 @@ export class HeartStore {
       tx.set(this.stateRef(), { ...previous, lastAttemptAt: updatedAt, lastSuccessAt: updatedAt, lastRange: range, dataThrough, error: null });
       tx.delete(this.leaseRef());
       return { changedHours, availableMinutes: points.filter(point => point.value !== null).length };
-    });
-  }
-
-  async fail(owner: string, code: SyncErrorCode): Promise<void> {
-    await this.db.runTransaction(async tx => {
-      const lock = await tx.get(this.leaseRef());
-      if (!lock.exists || lock.get('owner') !== owner) return;
-      const state = await tx.get(this.stateRef());
-      const at = new Date(this.clock()).toISOString();
-      tx.set(this.stateRef(), { ...blankState(), ...state.data(), lastAttemptAt: at, error: { code, at } });
-      tx.delete(this.leaseRef());
     });
   }
 
