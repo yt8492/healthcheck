@@ -88,29 +88,75 @@ h2 { font-size: 17px; font-weight: 500; margin: 6px 0 7px; letter-spacing: .02em
 @keyframes rotate { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loader { animation: none; } }
 .sleep-panel { margin-top: 24px; padding-bottom: 0; }
-.sleep-period { margin: 20px 0; font-size: 12px; }
-.sleep-presets, .sleep-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; }
-.sleep-legend { font-size: 11px; margin-bottom: 18px; }
+.sleep-period { margin: 20px 0 14px; font-size: 12px; }
+.sleep-period > p { font-size: 14px; color: #334155; font-variant-numeric: tabular-nums; }
+.sleep-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; margin-top: 16px; border-radius: 28px; background: #f0f3f7; max-width: 540px; }
+.sleep-presets button { border: 0; border-radius: 24px; color: #536173; background: transparent; min-height: 42px; padding: 9px 12px; font-size: 13px; }
+.sleep-presets button:hover { background: #e4eaf0; }
+.sleep-presets button[aria-pressed="true"] { color: #fff; background: #087da8; font-weight: 600; }
+.sleep-sync-details { color: #667588; font-size: 11px; margin: 12px 0 20px; }
+.sleep-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 11px; margin: 12px 0 18px; }
 .sleep-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.sleep-legend i { width: 12px; height: 12px; }
-.sleep-color.awake { background: #a75e36; }
-.sleep-color.light { background: #a7bbc3; }
-.sleep-color.deep { background: #354c78; }
-.sleep-color.rem { background: #9077ab; }
+.sleep-legend i { width: 12px; height: 12px; border-radius: 3px; }
+.sleep-color.awake { background: #d34e85; }
+.sleep-color.light { background: #4778f5; }
+.sleep-color.deep { background: #60278c; }
+.sleep-color.rem { background: #55cbe5; }
 .sleep-color.asleep { background: #547565; }
-.sleep-color.restless { background: #aa9145; }
-.sleep-color.unknown { background: repeating-linear-gradient(45deg,#c4c9c4,#c4c9c4 3px,#f4f5f1 3px,#f4f5f1 6px); }
+.sleep-color.restless { background: #cf9609; }
+.sleep-color.unknown { background: #d9dfe5; border: 1px dashed #8c97a3; }
 .sleep-status, .sleep-overview, .sleep-session p, .sleep-days p { font-size: 12px; line-height: 1.9; margin: 12px 0; }
+.sleep-overview { color: #657184; }
 .sleep-message { font-size: 13px; padding: 30px 0; line-height: 1.9; }
-.sleep-timeline { position: relative; height: 30px; background: #f4f6f2; border-radius: 4px; margin-top: 12px; }
-.sleep-timeline span { position: absolute; height: 100%; }
-.sleep-session, .sleep-days > details { padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
-.sleep-session summary, .sleep-days summary { max-width: 100%; line-height: 1.9; }
-.sleep-stack { display: flex; height: 18px; width: min(600px, 74vw); background: #f4f6f2; margin-top: 6px; }
+.sleep-session-view { margin-top: 24px; color: #243246; }
+.sleep-session-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.sleep-session-picker button { border-radius: 10px; color: #536173; text-align: left; }
+.sleep-session-picker button span { display: block; font-size: 10px; margin-top: 4px; }
+.sleep-session-picker button[aria-pressed="true"] { border-color: #88bbd1; background: #edf7fb; color: #086b94; }
+.sleep-duration-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.sleep-duration-heading h3 { font-size: 19px; font-weight: 600; }
+.sleep-duration-heading > span { font-size: 11px; color: #68768a; }
+.sleep-duration-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin: 15px 0 8px; }
+.sleep-duration-value { font-size: 42px; line-height: 1.25; font-weight: 500; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+.sleep-duration-value small { font-size: 21px; margin: 0 6px 0 3px; font-weight: 400; letter-spacing: 0; }
+.sleep-duration-value .sleep-duration-approx { font-size: 14px; margin: 0 7px 0 0; color: #657184; }
+.sleep-duration-line p { font-size: 12px; font-weight: 500; color: #435065; }
+.sleep-duration-note { font-size: 12px; line-height: 1.9; color: #657184; }
+.sleep-partial-note { font-size: 12px; padding: 12px 14px; border-radius: 8px; background: #f3f6fb; color: #50617b; margin-top: 12px; line-height: 1.8; }
+.sleep-stage-chart { margin-top: 26px; }
+.sleep-timeline { position: relative; width: 100%; }
+.sleep-chart-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sleep-stage-labels { position: absolute; inset: 0; padding: 0; margin: 0; pointer-events: none; }
+.sleep-stage-label { position: absolute; left: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; line-height: 1.5; font-size: 14px; }
+.sleep-stage-label dt { font-weight: 500; }
+.sleep-stage-label dd { margin: 0; font-size: 13px; color: #566276; font-variant-numeric: tabular-nums; }
+.sleep-time-axis { display: flex; justify-content: space-between; gap: 12px; color: #536173; font-variant-numeric: tabular-nums; }
+.sleep-time-axis > span { display: flex; flex-direction: column; gap: 4px; text-align: center; }
+.sleep-time-axis > span:first-child { text-align: left; }
+.sleep-time-axis > span:last-child { text-align: right; }
+.sleep-time-axis strong { font-size: 12px; font-weight: 500; }
+.sleep-time-axis small { font-size: 10px; color: #728095; }
+.sleep-session { margin: 22px 0; padding: 14px 16px; border: 1px solid #e1e7ed; background: #fafbfd; border-radius: 10px; font-size: 12px; color: #435065; }
+.sleep-session summary { max-width: 100%; line-height: 1.9; }
+.sleep-session summary strong { font-weight: 500; color: #08769e; margin-right: 12px; }
+.sleep-session summary > span { font-size: 11px; }
+.sleep-days > details { padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.sleep-days summary { width: 100%; line-height: 1.9; }
+.sleep-stack { display: flex; height: 18px; width: 100%; max-width: 600px; background: #f0f3f7; margin-top: 8px; border-radius: 4px; overflow: hidden; }
 .sleep-days { max-height: 720px; overflow: auto; }
 .sleep-session .table-wrap { width: 100%; }
 .sleep-session table { min-width: 370px; }
 .sleep-panel .chart-foot { display: block; font-size: 11px; line-height: 1.9; }
+@media (max-width: 600px) {
+  .sleep-period > p { font-size: 12px; }
+  .sleep-presets button { padding: 9px 4px; font-size: 12px; }
+  .sleep-duration-value { font-size: 32px; }
+  .sleep-duration-value small { font-size: 18px; }
+  .sleep-duration-line p { font-size: 11px; }
+  .sleep-stage-label { font-size: 13px; }
+  .sleep-stage-label dd { font-size: 12px; }
+  .sleep-session { padding: 12px; }
+}
 .chart-foot { border-top: 1px solid #edf0e9; padding: 15px 0 19px; display: flex; justify-content: space-between; gap: 14px; color: #95a08f; font-size: 10px; }
 .chart-foot p { display: flex; align-items: center; gap: 7px; }
 .gap-key { display: inline-block; width: 14px; border-top: 2px dashed #afbcaa; }

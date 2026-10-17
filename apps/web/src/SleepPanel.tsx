@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { DAY, HOUR, SLEEP_STAGES, floorMinute, retentionStart, summarizeSleep, validateRange,
-  type PublicStatus, type SleepCoverage, type SleepResponse, type SleepSession, type SleepStageType, type TimeRange } from '@healthcheck/core';
+  type PublicStatus, type SleepCoverage, type SleepResponse, type SleepSession, type TimeRange } from '@healthcheck/core';
 import { dateTime, toInput } from './time.js';
+import { sleepDurationParts, sleepLabels as labels, sleepMinutes as minutes } from './sleepPresentation.js';
 
-const labels: Record<SleepStageType, string> = {
-  awake: '覚醒・離床', light: '浅い睡眠', deep: '深い睡眠', rem: 'REM', asleep: '睡眠（段階なし）', restless: '落ち着かない', unknown: '段階未提供',
-};
-const minutes = (n: number | null) => n === null ? '不明' : `${Math.floor(n / 60)}時間${Math.round(n % 60 * 10) / 10}分`;
+const SleepTimeline = lazy(() => import('./SleepTimeline.js'));
 function savedRange(fallback: TimeRange): TimeRange {
   const q = new URLSearchParams(location.search);
   if (!q.has('sleepFrom') && !q.has('sleepTo')) return fallback;
@@ -64,6 +62,7 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
   }
   const summary = data ? summarizeSleep(data.sessions, selected) : null;
   const long = Date.parse(selected.to) - Date.parse(selected.from) > 2 * DAY;
+  const selectedDuration = Date.parse(selected.to) - Date.parse(selected.from);
   const status = data?.status;
   function context(session: SleepSession) {
     const to = Math.min(floorMinute(Date.now()), floorMinute(Date.parse(session.endTime)) + HOUR);
@@ -72,7 +71,7 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
   }
   function details(session: SleepSession) {
     return <details className="sleep-session" key={session.id}>
-      <summary>{dateTime(session.startTime)} ～ {dateTime(session.endTime)}{session.nap === true ? ' · 昼寝' : ''} · 睡眠 {minutes(session.asleepMinutes)}</summary>
+      <summary><strong>詳細を見る</strong><span>{dateTime(session.startTime)} ～ {dateTime(session.endTime)}{session.nap === true ? ' · 昼寝' : ''} · 睡眠 {minutes(session.asleepMinutes)}</span></summary>
       <p>実際の開始：<time dateTime={session.startTime}>{new Date(Date.parse(session.startTime) + 9 * HOUR).toISOString().replace('T', ' ').replace('Z', '')} JST</time></p>
       <p>実際の終了：<time dateTime={session.endTime}>{new Date(Date.parse(session.endTime) + 9 * HOUR).toISOString().replace('T', ' ').replace('Z', '')} JST</time></p>
       <p>JSTの起床日：{session.wakeDate} · セッション全体 {minutes(session.durationMinutes)} · 覚醒・離床 {minutes(session.stageMinutes.awake)}</p>
@@ -87,10 +86,11 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
     <div className="chart-heading"><div><p className="eyebrow">SLEEP</p><h2 id="sleep-title">睡眠の記録</h2><p>段階と覚醒を振り返る · 起床日で集計（JST）</p></div></div>
     <div className="sleep-period" aria-label="睡眠の表示期間">
       <p>{dateTime(selected.from)} ～ {dateTime(selected.to)}</p>
-      <div className="sleep-presets">{[1, 7, 30, 90].map(days => <button key={days} onClick={() => {
+      <div className="sleep-presets" aria-label="睡眠の期間を選択">{[1, 7, 30, 90].map(days => <button key={days}
+        aria-label={days === 1 ? '睡眠24時間' : `睡眠${days}日`} aria-pressed={Math.abs(selectedDuration - days * DAY) < 120_000} onClick={() => {
         const to = floorMinute(Date.now());
         choose({ from: new Date(Math.max(retentionStart(Date.now()), to - days * DAY)).toISOString(), to: new Date(to).toISOString() });
-      }}>{days === 1 ? '睡眠24時間' : `睡眠${days}日`}</button>)}</div>
+      }}>{days === 1 ? '1日' : days === 7 ? '1週間' : `${days}日`}</button>)}</div>
       <details className="date-controls"><summary>睡眠の日時を指定する</summary><form onSubmit={event => {
         event.preventDefault();
         try { choose(validateRange(`${from}:00+09:00`, `${to}:00+09:00`, Date.now(), 90 * 24 * 60)); }
@@ -102,7 +102,7 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
     {loading ? <p className="sleep-message" role="status">睡眠の全ページを読み込んでいます</p>
       : error ? <div className="alert" role="alert"><p>{error}</p><button onClick={() => setRetry(v => v + 1)}>睡眠を再試行</button></div>
       : <>
-        <p className="sleep-status" role="status">睡眠の最終同期：{status?.lastSuccessAt ? dateTime(status.lastSuccessAt) : '未取得'} · 最新終了日時：{status?.dataThrough ? dateTime(status.dataThrough) : 'なし'}</p>
+        <details className="sleep-sync-details"><summary>同期状況を確認</summary><p className="sleep-status" role="status">睡眠の最終同期：{status?.lastSuccessAt ? dateTime(status.lastSuccessAt) : '未取得'} · 最新終了日時：{status?.dataThrough ? dateTime(status.dataThrough) : 'なし'}</p></details>
         {status?.error && <p className="alert" role="status">睡眠の取得に失敗しています（{status.error.code}）。保存済みの記録を表示しています。</p>}
         {status?.state === 'delayed' && <p className="alert" role="status">睡眠の最終同期から1時間以上経過しています。保存済みの記録です。</p>}
         {status?.lastSuccessAt && data?.coverage !== 'fetched' && <p className="alert" role="status">この期間の取得は完了していません。取得済みの記録だけを表示しています。</p>}
@@ -111,8 +111,9 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
             : data?.coverage !== 'fetched' ? 'この期間の睡眠は未取得、または一部だけ取得済みです。'
               : 'この期間に取得できた睡眠はありません。未装着・未提供・記録なしの区別はできません。'}</p>
           : <>
-            <p className="sleep-overview">{summary?.sessionCount}セッション · 表示期間内の睡眠 {minutes(summary?.asleepMinutes ?? null)} · 覚醒・離床 {minutes(summary?.stageMinutes.awake ?? null)}</p>
-            <div className="sleep-legend">{SLEEP_STAGES.map(type => <span key={type}><i className={`sleep-color ${type}`} />{labels[type]}</span>)}</div>
+            {(long || data.sessions.length > 1 || data.sessions.some(s => s.startTime < selected.from || s.endTime > selected.to)) &&
+              <p className="sleep-overview">表示期間内の合計：睡眠 {minutes(summary?.asleepMinutes ?? null)} · {summary?.sessionCount}セッション</p>}
+            {long && <div className="sleep-legend">{SLEEP_STAGES.map(type => <span key={type}><i className={`sleep-color ${type}`} />{labels[type]}</span>)}</div>}
             {long ? <div className="sleep-days" aria-label="起床日別の睡眠内訳">{summary?.days.map(day => <details key={day.date}>
               <summary>{day.date} · 睡眠 {minutes(day.asleepMinutes)} · {day.sessionCount}セッション
                 <div className="sleep-stack" aria-label={`${day.date}の段階内訳`}>{SLEEP_STAGES.map(type => day.stageMinutes[type] > 0 && <span key={type} className={`sleep-color ${type}`} style={{ width: `${day.stageMinutes[type] / Math.max(...summary.days.map(d => d.durationMinutes)) * 100}%` }} title={`${labels[type]} ${minutes(day.stageMinutes[type])}`} />)}</div>
@@ -120,19 +121,31 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
               <p>{SLEEP_STAGES.map(type => `${labels[type]} ${minutes(day.stageMinutes[type])}`).join(' / ')}</p>
               {data.sessions.filter(s => s.wakeDate === day.date).map(details)}
             </details>)}</div>
-              : <div aria-label="睡眠段階のタイムライン">{data.sessions.map(session => <div key={session.id}>
-                <div className="sleep-timeline" role="img" aria-label={`${dateTime(session.startTime)}から${dateTime(session.endTime)}の睡眠段階。下の詳細で内訳を確認できます。`}>
-                  {session.stages.map(stage => {
-                    const start = Math.max(Date.parse(stage.startTime), Date.parse(selected.from));
-                    const end = Math.min(Date.parse(stage.endTime), Date.parse(selected.to));
-                    if (end <= start) return null;
-                    const duration = Date.parse(selected.to) - Date.parse(selected.from);
-                    return <span key={stage.startTime} className={`sleep-color ${stage.type}`} style={{ left: `${(start - Date.parse(selected.from)) / duration * 100}%`, width: `${(end - start) / duration * 100}%` }} title={`${labels[stage.type]} ${dateTime(stage.startTime)} ～ ${dateTime(stage.endTime)}`} />;
-                  })}
-                </div>{details(session)}
-              </div>)}</div>}
+              : <SleepSessionView sessions={data.sessions} range={selected} details={details} />}
           </>}
       </>}
     <p className="chart-foot">内訳は表示期間と重なる部分だけを集計。詳細にはセッション全体を表示します。段階未提供を睡眠0とは扱いません。</p>
   </section>;
+}
+
+function SleepSessionView({ sessions, range, details }: { sessions: SleepSession[]; range: TimeRange; details: (session: SleepSession) => ReactNode }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const session = sessions.find(s => s.id === selectedId) ?? [...sessions].reverse().find(s => s.nap !== true) ?? sessions.at(-1);
+  if (!session) return null;
+  const duration = session.asleepMinutes === null ? null : sleepDurationParts(Math.round(session.asleepMinutes));
+  const approximate = session.asleepMinutes !== null && !Number.isInteger(session.asleepMinutes);
+  const partial = session.startTime < range.from || session.endTime > range.to;
+  return <div className="sleep-session-view" aria-label="睡眠段階のタイムライン">
+    {sessions.length > 1 && <div className="sleep-session-picker" aria-label="表示する睡眠を選択">{sessions.map((s, index) => <button key={s.id}
+      aria-pressed={s.id === session.id} onClick={() => setSelectedId(s.id)}>{s.nap === true ? '昼寝' : `睡眠${index + 1}`}<span>{dateTime(s.startTime)}</span></button>)}</div>}
+    <div className="sleep-duration-heading"><h3>睡眠時間</h3><span>{session.nap === true ? '昼寝' : 'セッション全体'}</span></div>
+    <div className="sleep-duration-line"><div className="sleep-duration-value" title={`睡眠時間 ${minutes(session.asleepMinutes)}`}>{duration ? <>
+      {approximate && <small className="sleep-duration-approx">約</small>}
+      {duration.hours > 0 && <>{duration.hours}<small>時間</small></>}{duration.minutes}<small>分</small>
+    </> : '不明'}</div><p>{dateTime(session.startTime)} ～ {dateTime(session.endTime)}</p></div>
+    <p className="sleep-duration-note">記録の長さ {minutes(session.durationMinutes)} · {session.type === 'unknown' ? '睡眠段階は未提供' : `覚醒・離床 ${minutes(session.stageMinutes.awake)}`}</p>
+    {partial && <p className="sleep-partial-note">表示期間には睡眠の一部が含まれます。下のグラフと詳細はセッション全体です。</p>}
+    <Suspense fallback={<p className="sleep-message" role="status">睡眠のグラフを準備しています</p>}><SleepTimeline session={session} /></Suspense>
+    {details(session)}
+  </div>;
 }
