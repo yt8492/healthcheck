@@ -16,6 +16,7 @@
     "dev:web": "vite --config apps/web/vite.config.ts",
     "build": "node scripts/build.mjs",
     "build:site": "npm --prefix site run build",
+    "build:hosting": "node scripts/build-hosting.mjs",
     "start": "node --env-file-if-exists=.env dist/api/server.js",
     "check": "tsc --noEmit",
     "test": "vitest run --config vitest.config.ts",

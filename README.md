@@ -139,22 +139,28 @@ APIの有効化、専用サービスアカウントと権限、認証情報のSe
 - [プライバシーポリシー](PRIVACY_POLICY.md)
 - [利用規約](TERMS_OF_SERVICE.md)
 
-紹介ページと両文書は、GitHub Pagesで静的サイトとして公開します。
+独自ドメインはFirebase Hostingから公開します。ルートはダッシュボード、`/about/`は紹介ページ、`/privacy/`と`/terms/`は両文書です。`/api/**`だけを同じプロジェクトのCloud Run Service `healthcheck`（`asia-northeast1`）へ中継します。
 
 | Google Auth Platformの設定 | 値 |
 | --- | --- |
-| ホームページ | `https://healthcheck.yt8492.com/` |
-| プライバシーポリシー | `https://healthcheck.yt8492.com/privacy/` |
-| 利用規約 | `https://healthcheck.yt8492.com/terms/` |
+| ホームページ | `https://health.yt8492.com/` |
+| プライバシーポリシー | `https://health.yt8492.com/privacy/` |
+| 利用規約 | `https://health.yt8492.com/terms/` |
 | 承認済みドメイン | `yt8492.com` |
 
-`site/`には紹介ページ、共通レイアウト、CSS、ビルドスクリプトを配置しています。上記のルートMarkdownを原本とし、`npm run build:site`でHTMLに変換します。初回は`npm ci --prefix site`でサイト専用の依存関係を導入してください。ローカル確認は`python3 -m http.server 8788 --bind 127.0.0.1 --directory site/dist`で起動できます。
+`site/`には紹介ページ、共通レイアウト、CSS、ビルドスクリプトを配置しています。上記のルートMarkdownを原本とし、`npm run build:site`でHTMLに変換します。初回は`npm ci --prefix site`でサイト専用の依存関係を導入してください。ローカル確認は`python3 -m http.server 8788 --bind 127.0.0.1 --directory site/dist`で起動し、`http://127.0.0.1:8788/about/`を開きます。
 
-GitHub Pagesの公開元は「GitHub Actions」です。`.github/workflows/pages.yml`が`main`上のサイト・文書の変更を検出し、`site/dist`だけを公開します。ダッシュボード、API、健康データ、OAuth設定ファイルは公開物に含めません。公開先のドメインはビルドスクリプトとGitHub PagesのCustom domainで指定します。
+`npm run build:hosting`でダッシュボードと紹介・規約ページを`dist/hosting`にまとめます。公開物はブラウザ用のビルド成果物と指定した静的ページだけです。サーバーのコード、健康データ、OAuth設定ファイルは含めません。GitHub Pages用の公開ワークフローは廃止しています。
 
-Cloudflareでは`healthcheck`のCNAMEを`yt8492.github.io`へ向け、プロキシを「DNSのみ」、TTLを自動にします。既存の`yt8492.com`のサイトや他のDNSレコードは変更しません。GitHub Pages側で証明書が発行された後に「Enforce HTTPS」を有効にします。
+初回は対象のGoogle CloudプロジェクトにFirebaseを追加してHostingサイトを用意します。更新時は以下でHostingだけを公開します。デプロイ前に画面と静的ページを自動ビルドします。APIと同期処理の更新は別途`cloud:deploy`で行います。
 
-ブランディングの所有権確認は、Google Cloudプロジェクトの所有者アカウントでGoogle Search Consoleに`yt8492.com`のドメインプロパティを追加し、指定されたDNSのTXTレコードで行います。GitHub Pages側のDNS確認とGoogleの所有権確認は別の手続です。
+```sh
+npx firebase deploy --only hosting --project YOUR_PROJECT_ID
+```
+
+Firebase Hostingに`health.yt8492.com`をカスタムドメインとして追加します。Cloudflareの`health`をHostingが指定するCNAMEへ向け、プロキシは「DNSのみ」、TTLは自動にします。所有権と証明書の有効化、画面とAPIの動作確認後に、旧`healthcheck.yt8492.com`のHosting設定を新ドメインへの301転送に変更します。既存の`yt8492.com`のサイトや他のDNSレコードは変更しません。[Hostingのカスタムドメイン設定](https://firebase.google.com/docs/hosting/custom-domain)
+
+ブランディングの所有権確認は、Google Cloudプロジェクトの所有者アカウントでGoogle Search Consoleに`yt8492.com`のドメインプロパティを追加し、指定されたDNSのTXTレコードで行います。Hosting側のドメイン確認とSearch Consoleの所有権確認は別の手続です。
 
 現行の心拍機能、運営者本人のデータの公開、一般の閲覧者のアカウント連携を受け付けない運用を前提にしています。取得指標や共有方法を追加する場合は、文書と連携時の説明を更新します。
 

@@ -6,7 +6,7 @@ import { marked } from 'marked';
 const source = fileURLToPath(new URL('.', import.meta.url));
 const repository = fileURLToPath(new URL('../', import.meta.url));
 const output = join(source, 'dist');
-const origin = 'https://healthcheck.yt8492.com';
+const origin = 'https://health.yt8492.com';
 const template = await readFile(join(source, 'page.html'), 'utf8');
 const escapeHtml = (value) => value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
@@ -27,10 +27,12 @@ function page({ title, description, path, content, root = './', kind = 'home' })
 
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
-await writeFile(join(output, 'index.html'), page({
+await mkdir(join(output, 'about'), { recursive: true });
+await writeFile(join(output, 'about', 'index.html'), page({
   title: 'healthcheck — 健康の記録を、振り返る。',
   description: 'マヤミトが運営する、本人のFitbit心拍データをGoogle Health APIで取得・保存し、振り返りと公開に利用する個人サービス。',
-  path: '/',
+  path: '/about/',
+  root: '../',
   content: await readFile(join(source, 'home.html'), 'utf8'),
 }));
 
@@ -61,8 +63,6 @@ for (const document of [
 for (const asset of ['styles.css', 'favicon.svg']) {
   await copyFile(join(source, asset), join(output, asset));
 }
-await writeFile(join(output, 'CNAME'), 'healthcheck.yt8492.com\n');
-await writeFile(join(output, '.nojekyll'), '');
 await writeFile(join(output, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
-await writeFile(join(output, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${['/', '/privacy/', '/terms/'].map((path) => `  <url><loc>${origin}${path}</loc></url>`).join('\n')}\n</urlset>\n`);
+await writeFile(join(output, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${['/', '/about/', '/privacy/', '/terms/'].map((path) => `  <url><loc>${origin}${path}</loc></url>`).join('\n')}\n</urlset>\n`);
 console.log('Built introduction, privacy policy, and terms in site/dist.');

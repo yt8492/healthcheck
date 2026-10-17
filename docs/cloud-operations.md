@@ -7,6 +7,7 @@
 | リソース | 設定・用途 |
 | --- | --- |
 | Cloud Run Service `healthcheck` | 公開HTTPS、1 vCPU / 512 MiB、リクエスト単位課金、Service全体とRevisionの最小0 / 最大1、同時リクエスト40、リクエスト上限30秒 |
+| Firebase Hosting | `health.yt8492.com`のダッシュボード・紹介・規約ページを静的配信し、`/api/**`をCloud Runへ中継 |
 | Cloud Run Job `healthcheck-sync` | 非公開、1タスク・並列1、1 vCPU / 512 MiB、上限540秒、タスク再試行0、48時間再取得後に90日超を削除 |
 | Cloud Scheduler `healthcheck-sync-every-15m` | `*/15 * * * *`、Asia/Tokyo、Google Cloud APIへのOAuth認証付きPOST、受付の再試行0 |
 | Secret `healthcheck-google-health-oauth` | DBと同じリージョンで管理する、本人の接続済みOAuth JSON。同期Jobだけが読み取る |
@@ -38,7 +39,30 @@ npm run cloud:deploy -- --project YOUR_PROJECT_ID --region asia-northeast1
 
 デプロイは既存リソースを名前で再利用する。実行途中で失敗した場合は、原因を修正して同じコマンドで再開できる。ビルド成功後の設定だけをやり直す場合は`--image asia-northeast1-docker.pkg.dev/YOUR_PROJECT_ID/healthcheck/healthcheck@sha256:DIGEST`を追加すると、そのイメージから再開する。初回同期が失敗した場合は定期起動を新規作成せず停止する。作成済みの定期起動がある再デプロイでは、その状態を保持する。
 
-ServiceとJobは同じイメージdigestを使用する。`cloud:deploy`の出力にHTTPS URLが表示される。GitHub Pagesの紹介サイトは独立しているため、このコマンドはGitHubやそのDNSを変更しない。
+ServiceとJobは同じイメージdigestを使用する。`cloud:deploy`の出力にCloud RunのHTTPS URLが表示される。このコマンドはHostingやDNSを変更しない。
+
+独自ドメイン側の画面や紹介・規約ページを更新する場合は、サイト用の依存関係を導入してHostingだけを公開する。`firebase.json`のpredeployで`npm run build:hosting`を実行し、ブラウザ用ビルドと公開文書を`dist/hosting`にまとめる。APIの中継先は`asia-northeast1`のService `healthcheck`で、通常のCloud Runトラフィック設定に従う。
+
+```sh
+npm ci --prefix site
+npx firebase deploy --only hosting --project YOUR_PROJECT_ID
+```
+
+ルートはダッシュボード、紹介は`/about/`、文書は`/privacy/`と`/terms/`。DNSと証明書を切り替える前に、Hostingの`web.app` URLで画面、文書、`/api/v1/health`と`/api/v1/status`の動作を確認する。
+
+## 独自ドメインの移行
+
+`health.yt8492.com`は既存のHostingサイトに追加し、Cloudflareの`health`のCNAMEをHostingが指定する`healthcheck-511223.web.app`へ向ける。プロキシは「DNSのみ」、TTLは自動にする。CNAMEによって所有権も確認できるため、同名の所有権TXTは併設しない。証明書用のTXTが指定された場合は`_acme-challenge.health`に最新の値を登録する。
+
+`ownershipState=OWNERSHIP_ACTIVE`と`cert.state=CERT_ACTIVE`を確認し、新ドメインの正規HTTPS接続でダッシュボード・文書・APIを検証してから、旧`healthcheck.yt8492.com`のCustomDomainの`redirectTarget`を`health.yt8492.com`に更新する。旧ドメインのDNSと証明書は転送のため保持する。プロジェクト・Hostingサイト・Cloud Runのリソース名は変更しない。
+
+### 他サービスから配信先も移す場合
+
+既存の紹介サイトを維持したまま証明書を準備する場合、Hostingのカスタムドメインを追加し、表示されたACME DNSチャレンジを`_acme-challenge.healthcheck`のTXTに登録する。Consoleでチャレンジが表示されない場合は[CustomDomain API](https://firebase.google.com/docs/reference/hosting/rest/v1beta1/projects.sites.customDomains)の`cert.verification.dns`を確認する。チャレンジ値は変更される場合があるため、過去の値を再利用しない。
+
+所有権は`healthcheck`のTXT `hosting-site=YOUR_SITE_ID`で確認する。同じ名前にCNAMEとTXTは併設できないため、旧配信先がCNAMEの場合は旧サービスの正規のAレコードに置き換えて配信を維持してからTXTを追加する。`ownershipState=OWNERSHIP_ACTIVE`と`cert.state=CERT_ACTIVE`を確認した後、AレコードをHostingが指定するIPへ切り替える。Cloudflareのプロキシは「DNSのみ」にする。Search Console用のドメイン所有権確認とは別であり、他のサブドメインのレコードは変更しない。
+
+切り替え後は独自ドメインのHTTPS応答、画面とグラフ、紹介・規約へのリンク、APIのJSON応答を確認する。確認完了後、GitHub Pagesの旧カスタムドメイン設定を解除する。Hostingの所有権TXTは継続して保持する。
 
 ## 同期の確認
 

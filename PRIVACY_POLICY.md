@@ -1,6 +1,6 @@
 # healthcheck プライバシーポリシー
 
-制定日・最終更新日：2026年10月11日
+制定日：2026年10月11日 / 最終更新日：2026年10月12日
 
 マヤミト（以下「運営者」といいます。）は、健康データを振り返るサービス「healthcheck」（以下「本サービス」といいます。）における情報の取扱いを、次のとおり定めます。
 
@@ -54,11 +54,11 @@ Google Health APIとの連携、健康データの保存、サービスの運用
 
 提供者は、データの取得・保存・配信等に必要な範囲で情報を処理します。情報は、サービス提供者の契約や管理体制に従い、日本国外で処理される場合があります。
 
-### GitHub Pages
+### Firebase Hosting
 
-サービスの紹介ページ、プライバシーポリシー、利用規約の配信に、GitHub, Inc.が提供するGitHub Pagesを利用します。この静的サイトには、心拍の測定値やOAuth認証情報を保存・配信しません。
+ダッシュボード画面、サービスの紹介ページ、プライバシーポリシー、利用規約の配信に、Googleが提供するFirebase Hostingを利用します。静的な公開ファイルには、心拍の測定値やOAuth認証情報を含めません。公開APIへのリクエストはHostingからCloud Runへ中継し、保存済みの心拍データを返します。
 
-GitHub Pagesへのアクセス時には、閲覧者のIPアドレスがセキュリティ目的でGitHubに記録・保存されます。GitHubによる情報の取扱いについては、[GitHubのプライバシーに関する声明](https://docs.github.com/ja/site-policy/privacy-policies/github-general-privacy-statement)を参照してください。
+Hostingや公開APIへのアクセス時には、閲覧者のIPアドレスやリクエスト情報等が配信基盤で処理・記録される場合があります。Googleによる情報の取扱いについては、[Googleプライバシーポリシー](https://policies.google.com/privacy?hl=ja)を参照してください。
 
 ### Google Fonts
 
