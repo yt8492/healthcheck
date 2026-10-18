@@ -110,9 +110,9 @@ export function App() {
         {data && hasData && <details className="data-table"><summary>最後の60分を表で確認する</summary><div className="table-wrap"><table><caption>選択期間の最後の60分。単位：bpm</caption><thead><tr><th>日時（JST）</th><th>平均</th><th>最小</th><th>最大</th></tr></thead><tbody>{data.points.slice(-60).map(point => <tr key={point.time}><td>{dateTime(point.time)}</td><td>{bpm(point.value?.avg)}</td><td>{bpm(point.value?.min)}</td><td>{bpm(point.value?.max)}</td></tr>)}</tbody></table></div></details>}
       </section>
 
-      <ActivityPanel range={range} reload={reload} />
-
       <SleepPanel range={range} reload={reload} showHeart={choose} />
+
+      <ActivityPanel range={range} reload={reload} />
 
       <section className="record-note"><div className="note-icon" aria-hidden="true">i</div><div><h2>記録について</h2><p>Googleのウェアラブルデバイスから取得した、1分ごとの平均・最小・最大です。未装着や未取得の時間は欠損として表示します。</p><p>測定から90日間保存します。デバイスからの反映には時間差があります。</p></div></section>
     </main>
