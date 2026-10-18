@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { blankState, emptyPoints } from '@healthcheck/core';
+import { blankState, emptyPoints, floorMinute, retentionStart } from '@healthcheck/core';
 import { createApp, type ReadStore } from './app.js';
 
 const apps: Awaited<ReturnType<typeof createApp>>[] = [];
@@ -22,7 +22,7 @@ describe('公開API', () => {
     expect(body.status).toMatchObject({ state: 'not-synced', environment: 'emulator' });
     expect(res.headers['cache-control']).toBe('public, max-age=30');
   });
-  it.each(['metric=sleep', 'resolution=1s', 'from=invalid&to=invalid', 'from=2026-01-01T00:00:00Z&to=2026-01-01T00:01:00Z', 'from=2026-10-01T00:00:00Z&to=2026-10-10T00:00:00Z'])('不正クエリを400で返す %s', async query => {
+  it.each(['metric=sleep', 'resolution=1s', 'from=invalid&to=invalid', 'from=2026-01-01T00:00:00Z&to=2026-01-01T00:01:00Z', 'from=2026-10-01T00:00:00Z&to=2026-10-10T00:00:00Z&resolution=1m'])('不正クエリを400で返す %s', async query => {
     const res = await (await setup()).inject(`/api/v1/timeseries?${query}`);
     expect(res.statusCode).toBe(400); expect(res.json().error.code).toBe('invalid-query');
     expect(res.headers['cache-control']).toBe('no-store');
@@ -31,5 +31,17 @@ describe('公開API', () => {
     const fail = async () => { throw new Error('refresh_token=SECRET private-user-id'); };
     const res = await (await setup({ emulator: false, read: fail, state: fail })).inject(url);
     expect(res.statusCode).toBe(503); expect(res.body).not.toContain('SECRET');
+  });
+  it('90日APIはautoで日集計、明示1mの上限超えと保存境界外は400', async () => {
+    const app = await setup();
+    const range = { from: new Date(retentionStart(now)).toISOString(), to: new Date(floorMinute(now)).toISOString() };
+    const q = new URLSearchParams(range);
+    const res = await app.inject(`/api/v1/timeseries?${q}&resolution=auto`);
+    expect(res.statusCode).toBe(200); expect(res.json().resolution).toBe('1d');
+    expect(res.json().points.length).toBeLessThanOrEqual(91);
+    expect(res.json().points.every((p: { value: unknown }) => p.value === null)).toBe(true);
+    expect((await app.inject(`/api/v1/timeseries?${q}&resolution=1m`)).statusCode).toBe(400);
+    q.set('from', new Date(retentionStart(now) - 60_000).toISOString());
+    expect((await app.inject(`/api/v1/timeseries?${q}`)).statusCode).toBe(400);
   });
 });

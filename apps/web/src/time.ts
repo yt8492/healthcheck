@@ -1,4 +1,4 @@
-import { DAY, recentRange, validateRange, type TimeRange } from '@healthcheck/core';
+import { DAY, floorMinute, heartResolution, recentRange, retentionStart, validateRange, type HeartResolution, type TimeRange } from '@healthcheck/core';
 
 export const dateTime = (time: string) => new Intl.DateTimeFormat('ja-JP', {
   timeZone: 'Asia/Tokyo', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -11,16 +11,23 @@ export const dateOnly = (time: string) => new Intl.DateTimeFormat('ja-JP', {
 }).format(new Date(time));
 export const toInput = (time: string) => new Date(Date.parse(time) + 9 * 60 * 60_000).toISOString().slice(0, 16);
 export function inputRange(from: string, to: string): TimeRange {
-  const range = validateRange(`${from}:00+09:00`, `${to}:00+09:00`, Date.now());
-  if (Date.parse(range.to) - Date.parse(range.from) > DAY) throw new Error('この画面では24時間以内の範囲を指定してください。');
-  return range;
+  return validateRange(`${from}:00+09:00`, `${to}:00+09:00`, Date.now(), 90 * 1440);
 }
-export function rangeFromUrl(): { range: TimeRange; error?: string } {
+export function presetRange(days: number, now = Date.now()): TimeRange {
+  const to = floorMinute(now);
+  return { from: new Date(Math.max(retentionStart(now), to - days * DAY)).toISOString(), to: new Date(to).toISOString() };
+}
+export function moveRange(range: TimeRange, direction: number, now = Date.now()): TimeRange {
+  const duration = Date.parse(range.to) - Date.parse(range.from);
+  const start = Math.max(retentionStart(now), Math.min(floorMinute(now) - duration, Date.parse(range.from) + duration * direction));
+  return { from: new Date(start).toISOString(), to: new Date(start + duration).toISOString() };
+}
+export function rangeFromUrl(): { range: TimeRange; resolution: HeartResolution | 'auto'; error?: string } {
   const q = new URLSearchParams(location.search);
-  if (!q.has('from') && !q.has('to')) return { range: recentRange(Date.now()) };
   try {
-    const range = validateRange(q.get('from'), q.get('to'), Date.now());
-    if (Date.parse(range.to) - Date.parse(range.from) > DAY) throw new Error('表示期間は24時間以内で指定してください。');
-    return { range };
-  } catch (error) { return { range: recentRange(Date.now()), error: error instanceof Error ? error.message : 'URLの日時が不正です。' }; }
+    const range = !q.has('from') && !q.has('to') ? recentRange(Date.now()) : validateRange(q.get('from'), q.get('to'), Date.now(), 90 * 1440);
+    const resolution = q.get('resolution') ?? 'auto';
+    const selected = heartResolution(resolution, range);
+    return { range, resolution: resolution === 'auto' ? 'auto' : selected };
+  } catch (error) { return { range: recentRange(Date.now()), resolution: 'auto', error: error instanceof Error ? error.message : 'URLの日時が不正です。' }; }
 }

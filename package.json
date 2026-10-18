@@ -27,6 +27,7 @@
     "seed:emulator": "tsx scripts/seed-emulator.ts",
     "connect": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts connect",
     "sync:heart": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts sync --metric heart-rate",
+    "aggregate:heart": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts aggregate-heart",
     "sync:sleep": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts sync --metric sleep",
     "sync": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts sync",
     "prune": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts prune",

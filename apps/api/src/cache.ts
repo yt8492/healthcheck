@@ -1,10 +1,11 @@
-import type { ActivityMetric, ActivityPoint, HeartPoint, SleepSession, SyncState, TimeRange } from '@healthcheck/core';
+import type { ActivityMetric, ActivityPoint, HeartDisplay, HeartPoint, SleepSession, SyncState, TimeRange } from '@healthcheck/core';
 import type { ActivityReadStore, ReadStore, SleepReadStore } from './app.js';
 
 // Cloud Runの同じインスタンスでのみ共有する。失敗した読み取りは保存しない。
 export function cacheReads(source: ReadStore, clock = Date.now, ttl = 30_000, capacity = 16): ReadStore {
   type Entry<T> = { expiresAt: number; result: Promise<T> };
   const ranges = new Map<string, Entry<HeartPoint[]>>();
+  const displays = new Map<string, Map<string, Entry<HeartDisplay>>>();
   const sleepRanges = new Map<string, Entry<SleepSession[]>>();
   let sleepState: Entry<SyncState> | undefined;
   let state: Entry<SyncState> | undefined;
@@ -39,6 +40,11 @@ export function cacheReads(source: ReadStore, clock = Date.now, ttl = 30_000, ca
   }
   return {
     emulator: source.emulator,
+    readDisplay: source.readDisplay ? (range, resolution) => {
+      let cache = displays.get(resolution);
+      if (!cache) { cache = new Map(); displays.set(resolution, cache); }
+      return readRange(cache, range, () => source.readDisplay!(range, resolution));
+    } : undefined,
     activity: source.activity ? (() => {
       const metrics = new Map<ActivityMetric, ActivityReadStore>();
       return (metric: ActivityMetric): ActivityReadStore => {

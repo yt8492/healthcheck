@@ -1,6 +1,9 @@
 {
   "indexes": [],
   "fieldOverrides": [
+    { "collectionGroup": "heartDisplayHourly", "fieldPath": "totals", "indexes": [] },
+    { "collectionGroup": "heartDisplayHourly", "fieldPath": "fiveMinutes", "indexes": [] },
+    { "collectionGroup": "heartDisplayDaily", "fieldPath": "totals", "indexes": [] },
     {
       "collectionGroup": "seriesHourly",
       "fieldPath": "points",

@@ -21,7 +21,7 @@
 | `healthcheck-scheduler` | 同期Jobだけの`roles/run.invoker` |
 | `healthcheck-build` | ビルドソースBucketの`roles/storage.objectViewer`、対象Repositoryの`roles/artifactregistry.writer`、プロジェクトの`roles/logging.logWriter` |
 
-サービスアカウントの鍵ファイルは作らない。Firestoreのクライアント用ルールは`infra/firestore.rules`と同じ、全読み書き拒否であることを公開前に確認する。サーバーはIAMでアクセスする。`seriesHourly.points`、`sleepSessions.stages`、`activityHourly/<metric>/hours`の`points`のインデックスを無効化して書き込み・容量を抑える。SchedulerにJobの設定変更・Secret参照・Firestore操作の権限は与えない。
+サービスアカウントの鍵ファイルは作らない。Firestoreのクライアント用ルールは`infra/firestore.rules`と同じ、全読み書き拒否であることを公開前に確認する。サーバーはIAMでアクセスする。`seriesHourly.points`、`sleepSessions.stages`、`activityHourly/<metric>/hours`の`points`、`heartDisplayHourly.totals/fiveMinutes`と`heartDisplayDaily.totals`のインデックスを無効化して書き込み・容量を抑える。SchedulerにJobの設定変更・Secret参照・Firestore操作の権限は与えない。
 
 ## 初回公開・再デプロイ
 
@@ -40,6 +40,8 @@ npm run cloud:deploy -- --project YOUR_PROJECT_ID --region asia-northeast1
 デプロイは既存リソースを名前で再利用する。実行途中で失敗した場合は、原因を修正して同じコマンドで再開できる。ビルド成功後の設定だけをやり直す場合は`--image asia-northeast1-docker.pkg.dev/YOUR_PROJECT_ID/healthcheck/healthcheck@sha256:DIGEST`を追加すると、そのイメージから再開する。初回同期が失敗した場合は定期起動を新規作成せず停止する。作成済みの定期起動がある再デプロイでは、その状態を保持する。
 
 ServiceとJobは同じイメージdigestを使用する。`cloud:deploy`の出力にCloud RunのHTTPS URLが表示される。このコマンドはHostingやDNSを変更しない。
+
+心拍の長期間表示を初めて導入するときは、更新したコードで`GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID npm run aggregate:heart`を実行する。保存済み分値から90日以内の表示用集計を7日ずつ作り、上流への再取得と最終同期成功時刻の更新はしない。通常同期と共通の期限付きロックを使うため、実行中なら完了後に再実行する。再実行しても同じ集計は書き直さず、移行完了まではAPIが分値から計算する。Serviceと同期Jobを更新してから再度実行すれば、旧Jobと切り替わる間の変更も反映できる。過去データの初期取り込み（Issue #1）とは別の処理である。
 
 独自ドメイン側の画面や紹介・規約ページを更新する場合は、サイト用の依存関係を導入してHostingだけを公開する。`firebase.json`のpredeployで`npm run build:hosting`を実行し、ブラウザ用ビルドと公開文書を`dist/hosting`にまとめる。APIの中継先は`asia-northeast1`のService `healthcheck`で、通常のCloud Runトラフィック設定に従う。
 
@@ -117,6 +119,8 @@ gcloud run jobs update healthcheck-sync --image=PREVIOUS_IMAGE_DIGEST --project=
 ```
 
 戻す前にSchedulerを一時停止し、Jobの確認後に再開する。コンテナのロールバックはFirestoreのデータを巻き戻さない。
+
+旧イメージへ戻した同期Jobは表示用集計を更新しない。長期間表示のイメージを再導入するときは、`aggregate:heart`で保存済み分値から再構築してから確認する。1分値と表示用集計のコレクションは分かれているため、集計を再構築しても元の測定値を置換しない。
 
 ## 使用量と費用
 

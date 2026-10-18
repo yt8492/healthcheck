@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: Healthcheck API
-  version: 0.3.0
+  version: 0.4.0
   description: >-
-    本人が公開する心拍の1分集計値と睡眠セッション。 fromは含みtoは含まない。90日以内、分境界。心拍timeseriesは最大4096分、sleepとsummaryは最大90日。 avgは有効な1分平均の算術平均で、元センサーのサンプル数による加重平均ではない。
+    本人が公開する心拍の集計値と睡眠セッション。 fromは含みtoは含まない。90日以内、分境界。心拍timeseriesは端数を含め最大4096区間、sleepとsummaryも最大90日。 avgは有効な1分平均の合計と件数から算出し、元センサーのサンプル数による加重平均ではない。
     活動は最大90日、既知の1分合計を加算し、値の省略とレコード欠損を0にしない。日境界はJST。
 paths:
   /api/v1/health:
@@ -22,7 +22,7 @@ paths:
                   ok: { const: true }
   /api/v1/timeseries:
     get:
-      summary: 心拍の1分値、または活動の区間合計と日別集計
+      summary: 心拍の平均・最小最大・欠損、または活動の区間合計と日別集計
       parameters:
         - $ref: '#/components/parameters/from'
         - $ref: '#/components/parameters/to'
@@ -43,6 +43,7 @@ paths:
             type: string
             enum:
               - 1m
+              - 5m
               - 1h
               - 1d
               - auto
@@ -64,7 +65,7 @@ paths:
                           - resolution
                         properties:
                           resolution:
-                            const: 1m
+                            enum: [1m, 5m, 1h, 1d]
                           points:
                             type: array
                             maxItems: 4096
@@ -72,11 +73,31 @@ paths:
                               type: object
                               required:
                                 - time
+                                - to
                                 - value
+                                - sum
+                                - availableMinutes
+                                - totalMinutes
                               properties:
                                 time:
                                   type: string
                                   format: date-time
+                                  description: 区間の開始。fromを含み、UTCの5分・1時間境界またはJSTの日境界で区切る
+                                to:
+                                  type: string
+                                  format: date-time
+                                  description: 区間の終了（含まない）。両端の端数は指定範囲に切り詰める
+                                sum:
+                                  type: number
+                                  minimum: 0
+                                  description: 有効な1分平均の合計。全欠損は0だがvalueはnull
+                                availableMinutes:
+                                  type: integer
+                                  minimum: 0
+                                totalMinutes:
+                                  type: integer
+                                  minimum: 1
+                                  description: 区間の対象分数。差分が欠損分数
                                 value:
                                   oneOf:
                                     - type: "null"
@@ -88,7 +109,10 @@ paths:
                   - $ref: "#/components/schemas/ActivityTimeseries"
         '400': { $ref: '#/components/responses/InvalidQuery' }
         '503': { $ref: '#/components/responses/Unavailable' }
-      description: 活動はsteps/distance/total-calories/active-zone-minutes。autoは2日以内1m、14日以内1h、それ以外1d。活動の明示1mは最大4096分、その他は最大90日。心拍は従来どおり1m・最大4096分。
+      description: >-
+        心拍は1m・5m・1h・1d・auto、最大90日かつ端数を含め4096区間。autoは24時間以内1m、7日以内5m、30日以内1h、それ以上1d。
+        平均は有効な1分平均の合計÷有効な分数。最小・最大は分値の最小・最大を維持する。全欠損のvalueはnullで、欠損を0として補間しない。
+        活動はsteps/distance/total-calories/active-zone-minutes。5mは非対応。autoは2日以内1m、14日以内1h、それ以外1d。活動の明示1mは最大4096分、その他は最大90日。
   /api/v1/sleep:
     get:
       summary: 指定期間と重なる睡眠を終了日時・ID順に取得
