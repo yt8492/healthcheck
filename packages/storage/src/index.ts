@@ -10,6 +10,9 @@ const hourSchema = z.object({
   contentHash: z.string(), updatedAt: z.string(),
 });
 import { MetricStore } from './metric.js';
+import { ActivityStore } from './activity.js';
+import { type ActivityMetric } from '@healthcheck/core';
+export { ActivityStore } from './activity.js';
 import { SleepStore } from './sleep.js';
 export { SleepStore } from './sleep.js';
 export { LeaseBusyError, LeaseExpiredError } from './metric.js';
@@ -25,6 +28,7 @@ function readHour(doc: DocumentSnapshot): (HeartValue | null)[] {
 
 export class HeartStore extends MetricStore {
   constructor(db: Firestore, clock = Date.now) { super(db, clock, 'heart-rate'); }
+  activity(metric: ActivityMetric): ActivityStore { return new ActivityStore(this.db, metric, this.clock); }
   get sleep(): SleepStore { return new SleepStore(this.db, this.clock); }
 
   async read(range: TimeRange): Promise<HeartPoint[]> {

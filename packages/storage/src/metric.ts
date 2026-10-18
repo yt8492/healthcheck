@@ -15,11 +15,11 @@ export class LeaseExpiredError extends Error { constructor() { super('同期ロ�
 
 export class MetricStore {
   readonly emulator: boolean;
-  constructor(readonly db: Firestore, protected readonly clock: () => number, private readonly metric: 'heart-rate' | 'sleep') {
+  constructor(readonly db: Firestore, protected readonly clock: () => number, private readonly stateMetric: import('@healthcheck/core').PublicStatus['metric']) {
     this.emulator = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
   }
-  protected stateRef() { return this.db.doc(`syncState/${this.metric}`); }
-  protected leaseRef() { return this.db.doc(`jobLease/${this.metric}`); }
+  protected stateRef() { return this.db.doc(`syncState/${this.stateMetric}`); }
+  protected leaseRef() { return this.db.doc(`jobLease/${this.stateMetric}`); }
   async state(): Promise<SyncState> {
     const doc = await this.stateRef().get();
     return doc.exists ? stateSchema.parse(doc.data()) : blankState();

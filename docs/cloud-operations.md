@@ -1,6 +1,6 @@
 # クラウド運用
 
-既存Firestore Native DBと同じリージョンに、心拍・睡眠のダッシュボード・読み取りAPIと定期同期を配置する。心拍は1分の平均・最小・最大と日時、睡眠は開始・終了・時間・段階・覚醒を公開する。同期状態は指標別に返す。活動・日別生体指標は今後の追加対象。
+既存Firestore Native DBと同じリージョンに、心拍・睡眠・活動のダッシュボード・読み取りAPIと定期同期を配置する。心拍は1分の平均・最小・最大と日時、睡眠は開始・終了・時間・段階・覚醒を公開する。同期状態は指標別に返す。日別生体指標は今後の追加対象。活動は歩数・距離・総消費カロリー・アクティブゾーン時間と日時・日別合計を公開する。
 
 ## 構成と権限
 
@@ -21,7 +21,7 @@
 | `healthcheck-scheduler` | 同期Jobだけの`roles/run.invoker` |
 | `healthcheck-build` | ビルドソースBucketの`roles/storage.objectViewer`、対象Repositoryの`roles/artifactregistry.writer`、プロジェクトの`roles/logging.logWriter` |
 
-サービスアカウントの鍵ファイルは作らない。Firestoreのクライアント用ルールは`infra/firestore.rules`と同じ、全読み書き拒否であることを公開前に確認する。サーバーはIAMでアクセスする。`seriesHourly.points`と`sleepSessions.stages`のインデックスを無効化して書き込み・容量を抑える。SchedulerにJobの設定変更・Secret参照・Firestore操作の権限は与えない。
+サービスアカウントの鍵ファイルは作らない。Firestoreのクライアント用ルールは`infra/firestore.rules`と同じ、全読み書き拒否であることを公開前に確認する。サーバーはIAMでアクセスする。`seriesHourly.points`、`sleepSessions.stages`、`activityHourly/<metric>/hours`の`points`のインデックスを無効化して書き込み・容量を抑える。SchedulerにJobの設定変更・Secret参照・Firestore操作の権限は与えない。
 
 ## 初回公開・再デプロイ
 
@@ -98,7 +98,7 @@ gcloud scheduler jobs resume healthcheck-sync-every-15m --project=YOUR_PROJECT_I
 OAuthの`reauth-required`では保存済みデータの配信が続く。ローカルで本人が再接続し、Secretを更新してから実行確認する。
 
 ```sh
-npm run connect -- --sleep
+npm run connect -- --sleep --activity
 npm run cloud:credentials -- --project YOUR_PROJECT_ID --region asia-northeast1
 gcloud run jobs execute healthcheck-sync --project=YOUR_PROJECT_ID --region=asia-northeast1 --wait
 ```

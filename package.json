@@ -31,7 +31,8 @@
     "sync": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts sync",
     "prune": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts prune",
     "cloud:deploy": "tsx scripts/cloud.ts deploy",
-    "cloud:credentials": "tsx scripts/cloud.ts credentials"
+    "cloud:credentials": "tsx scripts/cloud.ts credentials",
+    "sync:activity": "tsx --env-file-if-exists=.env apps/sync/src/cli.ts sync --metric activity"
   },
   "dependencies": {
     "@fastify/compress": "9.2.1",

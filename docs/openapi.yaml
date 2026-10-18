@@ -1,11 +1,10 @@
 openapi: 3.1.0
 info:
   title: Healthcheck API
-  version: 0.2.0
+  version: 0.3.0
   description: >-
-    本人が公開する心拍の1分集計値と睡眠セッション。
-    fromは含みtoは含まない。90日以内、分境界。timeseriesは最大4096分、sleepとsummaryは最大90日。
-    avgは有効な1分平均の算術平均で、元センサーのサンプル数による加重平均ではない。
+    本人が公開する心拍の1分集計値と睡眠セッション。 fromは含みtoは含まない。90日以内、分境界。心拍timeseriesは最大4096分、sleepとsummaryは最大90日。 avgは有効な1分平均の算術平均で、元センサーのサンプル数による加重平均ではない。
+    活動は最大90日、既知の1分合計を加算し、値の省略とレコード欠損を0にしない。日境界はJST。
 paths:
   /api/v1/health:
     get:
@@ -18,56 +17,83 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ok]
+                required: [ ok ]
                 properties:
                   ok: { const: true }
   /api/v1/timeseries:
     get:
-      summary: 心拍の1分値と期間の統計
+      summary: 心拍の1分値、または活動の区間合計と日別集計
       parameters:
         - $ref: '#/components/parameters/from'
         - $ref: '#/components/parameters/to'
         - name: metric
           in: query
-          schema: { type: string, enum: [heart-rate], default: heart-rate }
+          schema:
+            type: string
+            enum:
+              - heart-rate
+              - steps
+              - distance
+              - total-calories
+              - active-zone-minutes
+            default: heart-rate
         - name: resolution
           in: query
-          schema: { type: string, enum: [1m, auto], default: 1m }
+          schema:
+            type: string
+            enum:
+              - 1m
+              - 1h
+              - 1d
+              - auto
+            default: auto
       responses:
         '200':
           description: 取得成功。未同期・欠損はnullで表現する
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/Metadata'
-                  - type: object
-                    required: [points, summary, status, resolution]
-                    properties:
-                      resolution: { const: 1m }
-                      points:
-                        type: array
-                        maxItems: 4096
-                        items:
-                          type: object
-                          required: [time, value]
-                          properties:
-                            time: { type: string, format: date-time }
-                            value:
-                              oneOf:
-                                - { type: 'null' }
-                                - $ref: '#/components/schemas/HeartValue'
-                      summary: { $ref: '#/components/schemas/Summary' }
-                      status: { $ref: '#/components/schemas/Status' }
+                oneOf:
+                  - allOf:
+                      - $ref: "#/components/schemas/Metadata"
+                      - type: object
+                        required:
+                          - points
+                          - summary
+                          - status
+                          - resolution
+                        properties:
+                          resolution:
+                            const: 1m
+                          points:
+                            type: array
+                            maxItems: 4096
+                            items:
+                              type: object
+                              required:
+                                - time
+                                - value
+                              properties:
+                                time:
+                                  type: string
+                                  format: date-time
+                                value:
+                                  oneOf:
+                                    - type: "null"
+                                    - $ref: "#/components/schemas/HeartValue"
+                          summary:
+                            $ref: "#/components/schemas/Summary"
+                          status:
+                            $ref: "#/components/schemas/Status"
+                  - $ref: "#/components/schemas/ActivityTimeseries"
         '400': { $ref: '#/components/responses/InvalidQuery' }
         '503': { $ref: '#/components/responses/Unavailable' }
+      description: 活動はsteps/distance/total-calories/active-zone-minutes。autoは2日以内1m、14日以内1h、それ以外1d。活動の明示1mは最大4096分、その他は最大90日。心拍は従来どおり1m・最大4096分。
   /api/v1/sleep:
     get:
       summary: 指定期間と重なる睡眠を終了日時・ID順に取得
       description: >-
-        startTime < to かつ endTime > from。終了日時から90日を超えたセッションは返さない。
-        実際の開始・終了と全段階を返し、指定期間の境界で切り詰めない。
-        全ページを同じfrom/toで取得する。単位は分、短い覚醒と離床の重複は正規化済み。
+        startTime < to かつ endTime > from。終了日時から90日を超えたセッションは返さない。 実際の開始・終了と全段階を返し、指定期間の境界で切り詰めない。 全ページを同じfrom/toで取得する。単位は分、短い覚醒と離床の重複は正規化済み。
       parameters:
         - $ref: '#/components/parameters/from'
         - $ref: '#/components/parameters/to'
@@ -82,7 +108,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [from, to, metric, unit, sessions, nextCursor, status, coverage]
+                required: [ from, to, metric, unit, sessions, nextCursor, status, coverage ]
                 properties:
                   from: { type: string, format: date-time }
                   to: { type: string, format: date-time }
@@ -92,14 +118,14 @@ paths:
                     type: array
                     maxItems: 50
                     items: { $ref: '#/components/schemas/SleepSession' }
-                  nextCursor: { type: [string, 'null'] }
+                  nextCursor: { type: [ string, 'null' ] }
                   status: { $ref: '#/components/schemas/Status' }
                   coverage: { $ref: '#/components/schemas/SleepCoverage' }
         '400': { $ref: '#/components/responses/InvalidQuery' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/summary:
     get:
-      summary: 心拍の期間統計と睡眠の日別内訳・同期状態
+      summary: 心拍・睡眠と活動4指標の合計・日別内訳・同期状態
       description: 睡眠の内訳は表示期間と重なる部分だけを集計し、元のセッションのJST起床日に対応付ける
       parameters:
         - $ref: '#/components/parameters/from'
@@ -114,14 +140,17 @@ paths:
                   - $ref: '#/components/schemas/Metadata'
                   - $ref: '#/components/schemas/Summary'
                   - type: object
-                    required: [status, sleep]
+                    required:
+                      - status
+                      - sleep
+                      - activity
                     properties:
                       status: { $ref: '#/components/schemas/Status' }
                       sleep:
                         allOf:
                           - $ref: '#/components/schemas/SleepTotals'
                           - type: object
-                            required: [sessionCount, days, unit, status, coverage]
+                            required: [ sessionCount, days, unit, status, coverage ]
                             properties:
                               sessionCount: { type: integer, minimum: 0 }
                               unit: { const: minutes }
@@ -133,10 +162,26 @@ paths:
                                   allOf:
                                     - $ref: '#/components/schemas/SleepTotals'
                                     - type: object
-                                      required: [date, sessionCount]
+                                      required: [ date, sessionCount ]
                                       properties:
                                         date: { type: string, format: date }
                                         sessionCount: { type: integer, minimum: 1 }
+                      activity:
+                        type: object
+                        required:
+                          - steps
+                          - distance
+                          - total-calories
+                          - active-zone-minutes
+                        properties:
+                          steps:
+                            $ref: "#/components/schemas/ActivityMetric"
+                          distance:
+                            $ref: "#/components/schemas/ActivityMetric"
+                          total-calories:
+                            $ref: "#/components/schemas/ActivityMetric"
+                          active-zone-minutes:
+                            $ref: "#/components/schemas/ActivityMetric"
         '400': { $ref: '#/components/responses/InvalidQuery' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/status:
@@ -151,14 +196,30 @@ paths:
                 allOf:
                   - $ref: '#/components/schemas/Status'
                   - type: object
-                    required: [metrics]
+                    required: [ metrics ]
                     properties:
                       metrics:
                         type: object
-                        required: [heart-rate, sleep]
+                        required:
+                          - heart-rate
+                          - sleep
+                          - steps
+                          - distance
+                          - total-calories
+                          - active-zone-minutes
                         properties:
-                          heart-rate: { $ref: '#/components/schemas/Status' }
-                          sleep: { $ref: '#/components/schemas/Status' }
+                          heart-rate:
+                            $ref: "#/components/schemas/Status"
+                          sleep:
+                            $ref: "#/components/schemas/Status"
+                          steps:
+                            $ref: "#/components/schemas/Status"
+                          distance:
+                            $ref: "#/components/schemas/Status"
+                          total-calories:
+                            $ref: "#/components/schemas/Status"
+                          active-zone-minutes:
+                            $ref: "#/components/schemas/Status"
         '503': { $ref: '#/components/responses/Unavailable' }
 components:
   parameters:
@@ -175,14 +236,14 @@ components:
   schemas:
     HeartValue:
       type: object
-      required: [avg, min, max]
+      required: [ avg, min, max ]
       properties:
         avg: { type: number, exclusiveMinimum: 0 }
         min: { type: number, exclusiveMinimum: 0 }
         max: { type: number, exclusiveMinimum: 0 }
     Metadata:
       type: object
-      required: [from, to, metric, unit, aggregation]
+      required: [ from, to, metric, unit, aggregation ]
       properties:
         from: { type: string, format: date-time }
         to: { type: string, format: date-time }
@@ -191,11 +252,11 @@ components:
         aggregation: { const: mean-of-valid-minute-averages }
     Summary:
       type: object
-      required: [avg, min, max, availableMinutes, totalMinutes, latest]
+      required: [ avg, min, max, availableMinutes, totalMinutes, latest ]
       properties:
-        avg: { type: [number, 'null'] }
-        min: { type: [number, 'null'] }
-        max: { type: [number, 'null'] }
+        avg: { type: [ number, 'null' ] }
+        min: { type: [ number, 'null' ] }
+        max: { type: [ number, 'null' ] }
         availableMinutes: { type: integer, minimum: 0 }
         totalMinutes: { type: integer, minimum: 1 }
         latest:
@@ -203,18 +264,25 @@ components:
           oneOf:
             - { type: 'null' }
             - type: object
-              required: [time, avg]
+              required: [ time, avg ]
               properties:
                 time: { type: string, format: date-time }
                 avg: { type: number }
     Status:
       type: object
-      required: [metric, state, lastAttemptAt, lastSuccessAt, lastRange, dataThrough, error, environment, sourceFamily, retentionDays]
+      required: [ metric, state, lastAttemptAt, lastSuccessAt, lastRange, dataThrough, error, environment, sourceFamily, retentionDays ]
       properties:
-        metric: { enum: [heart-rate, sleep] }
-        state: { type: string, enum: [not-synced, ok, delayed, error] }
-        lastAttemptAt: { type: [string, 'null'], format: date-time }
-        lastSuccessAt: { type: [string, 'null'], format: date-time }
+        metric:
+          enum:
+            - heart-rate
+            - sleep
+            - steps
+            - distance
+            - total-calories
+            - active-zone-minutes
+        state: { type: string, enum: [ not-synced, ok, delayed, error ] }
+        lastAttemptAt: { type: [ string, 'null' ], format: date-time }
+        lastSuccessAt: { type: [ string, 'null' ], format: date-time }
         lastRange:
           oneOf:
             - { type: 'null' }
@@ -227,40 +295,39 @@ components:
           description: 睡眠の終了日時フィルターで取得に成功した範囲の和集合。失敗した範囲は追加しない
           items:
             type: object
-            required: [from, to]
+            required: [ from, to ]
             properties:
               from: { type: string, format: date-time }
               to: { type: string, format: date-time }
-        dataThrough: { type: [string, 'null'], format: date-time }
+        dataThrough: { type: [ string, 'null' ], format: date-time }
         error:
           oneOf:
             - { type: 'null' }
             - type: object
               properties:
-                code: { enum: [reauth-required, access-denied, upstream-unavailable, invalid-upstream-data, storage-error] }
+                code: { enum: [ reauth-required, access-denied, upstream-unavailable, invalid-upstream-data, storage-error ] }
                 at: { type: string, format: date-time }
-        environment: { enum: [emulator, production] }
+        environment: { enum: [ emulator, production ] }
         sourceFamily: { const: users/me/dataSourceFamilies/google-wearables }
         retentionDays: { const: 90 }
     SleepCoverage:
       type: string
-      enum: [not-fetched, partial, fetched]
+      enum: [ not-fetched, partial, fetched ]
       description: >-
-        最終同期成功時点の取得範囲。表示期間の開始から成功時点までの終了日時が取得済みならfetched。
-        表示期間後に終了するセッションも重なり検索の対象なので、to以降の取得も必要。
+        最終同期成功時点の取得範囲。表示期間の開始から成功時点までの終了日時が取得済みならfetched。 表示期間後に終了するセッションも重なり検索の対象なので、to以降の取得も必要。
         部分取得の空データは「記録なし」と確定しない。端末からの未反映や未提供を区別する値ではない。
     SleepTotals:
       type: object
-      required: [durationMinutes, asleepMinutes, stageMinutes]
+      required: [ durationMinutes, asleepMinutes, stageMinutes ]
       properties:
         durationMinutes: { type: number, minimum: 0 }
         asleepMinutes:
-          type: [number, 'null']
+          type: [ number, 'null' ]
           minimum: 0
           description: LIGHT・DEEP・REM・ASLEEPの合計。段階がすべて不明ならnull。unknownの時間は含まない
         stageMinutes:
           type: object
-          required: [awake, light, deep, rem, asleep, restless, unknown]
+          required: [ awake, light, deep, rem, asleep, restless, unknown ]
           properties:
             awake: { type: number, minimum: 0 }
             light: { type: number, minimum: 0 }
@@ -273,33 +340,148 @@ components:
       allOf:
         - $ref: '#/components/schemas/SleepTotals'
         - type: object
-          required: [id, startTime, endTime, wakeDate, type, nap, stages]
+          required: [ id, startTime, endTime, wakeDate, type, nap, stages ]
           properties:
             id: { type: string, pattern: '^[a-f0-9]{64}$' }
             startTime: { type: string, format: date-time }
             endTime: { type: string, format: date-time }
             wakeDate: { type: string, format: date, description: Asia/Tokyoの終了日 }
-            type: { enum: [stages, classic, unknown] }
-            nap: { type: [boolean, 'null'], description: 上流が区分を提供しなければnull }
+            type: { enum: [ stages, classic, unknown ] }
+            nap: { type: [ boolean, 'null' ], description: 上流が区分を提供しなければnull }
             stages:
               type: array
               items:
                 type: object
-                required: [startTime, endTime, type]
+                required: [ startTime, endTime, type ]
                 properties:
                   startTime: { type: string, format: date-time }
                   endTime: { type: string, format: date-time }
-                  type: { enum: [awake, light, deep, rem, asleep, restless, unknown] }
+                  type: { enum: [ awake, light, deep, rem, asleep, restless, unknown ] }
     Error:
       type: object
-      required: [error]
+      required: [ error ]
       properties:
         error:
           type: object
-          required: [code, message]
+          required: [ code, message ]
           properties:
-            code: { enum: [invalid-query, storage-unavailable] }
+            code: { enum: [ invalid-query, storage-unavailable ] }
             message: { type: string }
+    ActivityTotals:
+      type: object
+      required:
+        - total
+        - availableMinutes
+        - omittedMinutes
+        - missingMinutes
+        - totalMinutes
+      description: totalは既知値だけの和。既知値がなければnull。明示0はavailableMinutesに含む。omittedはレコードはあるが値なし、missingはレコードなし。完全取得の判定はcoverageで別に行う。
+      properties:
+        total:
+          type:
+            - number
+            - "null"
+          minimum: 0
+        availableMinutes: &a1
+          type: integer
+          minimum: 0
+        omittedMinutes: *a1
+        missingMinutes: *a1
+        totalMinutes: *a1
+    ActivityBucket:
+      allOf:
+        - $ref: "#/components/schemas/ActivityTotals"
+        - type: object
+          required:
+            - from
+            - to
+          properties:
+            from: &a1
+              type: string
+              format: date-time
+            to: *a1
+    ActivitySummary:
+      allOf:
+        - $ref: "#/components/schemas/ActivityTotals"
+        - type: object
+          required:
+            - days
+          properties:
+            days:
+              type: array
+              maxItems: 91
+              items:
+                allOf:
+                  - $ref: "#/components/schemas/ActivityBucket"
+                  - type: object
+                    required:
+                      - date
+                      - partialDay
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                      partialDay:
+                        type: boolean
+                        description: JSTの1日全体ではない指定範囲。今日の途中・端数日を含む。
+    ActivityMetric:
+      type: object
+      required:
+        - metric
+        - unit
+        - aggregation
+        - summary
+        - status
+        - coverage
+      properties:
+        metric:
+          enum:
+            - steps
+            - distance
+            - total-calories
+            - active-zone-minutes
+        unit:
+          enum:
+            - steps
+            - m
+            - kcal
+            - zone-minutes
+          description: 距離はm、総消費kcalは基礎代謝を含む。AZMは強度を反映済みのポイント数で再加重しない。
+        aggregation:
+          const: sum-of-known-minute-values
+        summary:
+          $ref: "#/components/schemas/ActivitySummary"
+        status:
+          $ref: "#/components/schemas/Status"
+        coverage:
+          enum:
+            - not-fetched
+            - partial
+            - fetched
+    ActivityTimeseries:
+      allOf:
+        - $ref: "#/components/schemas/ActivityMetric"
+        - type: object
+          required:
+            - from
+            - to
+            - resolution
+            - points
+          properties:
+            from: &a1
+              type: string
+              format: date-time
+            to: *a1
+            resolution:
+              enum:
+                - 1m
+                - 1h
+                - 1d
+            points:
+              type: array
+              maxItems: 4096
+              items:
+                $ref: "#/components/schemas/ActivityBucket"
   responses:
     InvalidQuery:
       description: 指標・日時・粒度・件数上限・保存範囲の不正指定

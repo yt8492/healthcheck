@@ -1,5 +1,5 @@
-import type { HeartPoint, SleepSession, SyncState, TimeRange } from '@healthcheck/core';
-import type { ReadStore, SleepReadStore } from './app.js';
+import type { ActivityMetric, ActivityPoint, HeartPoint, SleepSession, SyncState, TimeRange } from '@healthcheck/core';
+import type { ActivityReadStore, ReadStore, SleepReadStore } from './app.js';
 
 // Cloud Runの同じインスタンスでのみ共有する。失敗した読み取りは保存しない。
 export function cacheReads(source: ReadStore, clock = Date.now, ttl = 30_000, capacity = 16): ReadStore {
@@ -24,14 +24,14 @@ export function cacheReads(source: ReadStore, clock = Date.now, ttl = 30_000, ca
       return readRange(sleepRanges, range, () => source.sleep!.read(range));
     },
   } : undefined;
-  function readRange<T>(cache: Map<string, Entry<T>>, range: TimeRange, read: () => Promise<T>): Promise<T> {
+  function readRange<T>(cache: Map<string, Entry<T>>, range: TimeRange, read: () => Promise<T>, limit = capacity): Promise<T> {
     const key = `${range.from}/${range.to}`;
     for (const [key, cached] of cache) if (cached.expiresAt <= clock()) cache.delete(key);
     let current = cache.get(key);
     if (!current) {
       current = entry(read);
       const saved = current;
-      if (cache.size >= capacity) cache.delete(cache.keys().next().value!);
+      if (cache.size >= limit) cache.delete(cache.keys().next().value!);
       cache.set(key, current);
       void current.result.catch(() => { if (cache.get(key) === saved) cache.delete(key); });
     }
@@ -39,6 +39,28 @@ export function cacheReads(source: ReadStore, clock = Date.now, ttl = 30_000, ca
   }
   return {
     emulator: source.emulator,
+    activity: source.activity ? (() => {
+      const metrics = new Map<ActivityMetric, ActivityReadStore>();
+      return (metric: ActivityMetric): ActivityReadStore => {
+        let cached = metrics.get(metric);
+        if (!cached) {
+          const upstream = source.activity!(metric), ranges = new Map<string, Entry<ActivityPoint[]>>();
+          let state: Entry<SyncState> | undefined;
+          cached = {
+            state() {
+              if (!state || state.expiresAt <= clock()) {
+                const current = entry(() => upstream.state()); state = current;
+                void current.result.catch(() => { if (state === current) state = undefined; });
+              }
+              return state.result;
+            },
+            read(range) { return readRange(ranges, range, () => upstream.read(range), 2); },
+          };
+          metrics.set(metric, cached);
+        }
+        return cached;
+      };
+    })() : undefined,
     sleep,
     state() {
       if (!state || state.expiresAt <= clock()) {

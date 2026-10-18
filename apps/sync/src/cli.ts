@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { InputError, recentRange, validateRange } from '@healthcheck/core';
+import { ACTIVITY_METRICS, isActivityMetric, InputError, recentRange, validateRange } from '@healthcheck/core';
 import { GoogleHealthClient, HealthApiError } from '@healthcheck/google-health';
 import { loadAuthorizedFetch } from '@healthcheck/google-health/credentials';
 import { createStore, LeaseBusyError, LeaseExpiredError } from '@healthcheck/storage';
@@ -9,28 +9,28 @@ import { syncMetrics } from './sync.js';
 async function main() {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
     client: { type: 'string' }, from: { type: 'string' }, to: { type: 'string' }, help: { type: 'boolean' },
-    sleep: { type: 'boolean' }, metric: { type: 'string', default: 'all' },
+    sleep: { type: 'boolean' }, activity: { type: 'boolean' }, metric: { type: 'string', default: 'all' },
   } });
   const command = positionals[0];
   if (values.help || !command) {
-    console.log('connect [--client /path/to/oauth-client.json] [--sleep]\nsync [--metric heart-rate|sleep|all] [--from RFC3339 --to RFC3339]  ※既定は直近48時間、最大7日\nprune'); return;
+    console.log('connect [--client /path/to/oauth-client.json] [--sleep] [--activity]\nsync [--metric heart-rate|sleep|activity|steps|distance|total-calories|active-zone-minutes|all] [--from RFC3339 --to RFC3339]  ※既定は直近48時間、最大7日\nprune'); return;
   }
   if (command === 'connect') {
     await connect(values.client ?? process.env.GOOGLE_OAUTH_CLIENT_FILE ?? '.local/oauth-client.json',
       process.env.GOOGLE_HEALTH_TOKEN_FILE ?? '.local/google-health-tokens.json',
-      process.env.GOOGLE_OAUTH_REDIRECT_URI ?? 'http://127.0.0.1:8787/oauth/callback', values.sleep); return;
+      process.env.GOOGLE_OAUTH_REDIRECT_URI ?? 'http://127.0.0.1:8787/oauth/callback', values.sleep, values.activity); return;
   }
   if (!['sync', 'prune'].includes(command)) throw new Error('不明なコマンドです。--helpを参照してください。');
   const store = createStore();
   try {
     if (command === 'prune') {
-      const results = await Promise.allSettled([store.prune(), store.sleep.prune()]);
-      results.forEach((result, i) => console.log(`${i === 0 ? '心拍' : '睡眠'}の期限削除: ${result.status === 'fulfilled' ? `${result.value}件` : '失敗'}`));
+      const results = await Promise.allSettled([store.prune(), store.sleep.prune(), ...ACTIVITY_METRICS.map(metric => store.activity(metric).prune())]);
+      results.forEach((result, i) => console.log(`${['heart-rate', 'sleep', ...ACTIVITY_METRICS][i]}の期限削除: ${result.status === 'fulfilled' ? `${result.value}件` : '失敗'}`));
       if (results.some(result => result.status === 'rejected')) process.exitCode = 1;
       return;
     }
     const metric = values.metric;
-    if (metric !== 'heart-rate' && metric !== 'sleep' && metric !== 'all') throw new InputError('--metricはheart-rate、sleep、allから選んでください。');
+    if (metric !== 'heart-rate' && metric !== 'sleep' && metric !== 'all' && metric !== 'activity' && !isActivityMetric(metric)) throw new InputError('--metricに対応する指標、activity、allを指定してください。');
     if (Boolean(values.from) !== Boolean(values.to)) throw new Error('--fromと--toは両方指定してください。');
     const requested = values.from && values.to ? { from: values.from, to: values.to } : recentRange(Date.now(), 48);
     const range = validateRange(requested.from, requested.to, Date.now(), 7 * 24 * 60);

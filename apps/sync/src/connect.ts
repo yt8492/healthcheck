@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { OAuth2Client, CodeChallengeMethod } from 'google-auth-library';
-import { HEART_SCOPE, SLEEP_SCOPE, GoogleHealthClient } from '@healthcheck/google-health';
+import { HEART_SCOPE, SLEEP_SCOPE, ACTIVITY_SCOPE, GoogleHealthClient } from '@healthcheck/google-health';
 import { readClient, savePrivateJson, authorizedFetch } from '@healthcheck/google-health/credentials';
 
 export function validState(received: string | null, expected: string): boolean {
@@ -10,7 +10,7 @@ export function validState(received: string | null, expected: string): boolean {
   return actual.length === wanted.length && timingSafeEqual(actual, wanted);
 }
 
-export async function connect(clientPath: string, tokenPath: string, redirectUri: string, includeSleep = false): Promise<void> {
+export async function connect(clientPath: string, tokenPath: string, redirectUri: string, includeSleep = false, includeActivity = false): Promise<void> {
   const redirect = new URL(redirectUri);
   if (redirect.protocol !== 'http:' || redirect.hostname !== '127.0.0.1' || !redirect.port || redirect.search || redirect.hash) {
     throw new Error('OAuthコールバックにはポート付きのhttp://127.0.0.1を指定してください。');
@@ -19,7 +19,7 @@ export async function connect(clientPath: string, tokenPath: string, redirectUri
   const client = new OAuth2Client({ clientId: config.client_id, clientSecret: config.client_secret, redirectUri, transporterOptions: { timeout: 30_000 } });
   const verifier = await client.generateCodeVerifierAsync();
   const state = randomBytes(32).toString('hex');
-  const scopes = includeSleep ? [HEART_SCOPE, SLEEP_SCOPE] : [HEART_SCOPE];
+  const scopes = [HEART_SCOPE, ...(includeSleep ? [SLEEP_SCOPE] : []), ...(includeActivity ? [ACTIVITY_SCOPE] : [])];
   const authUrl = client.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: scopes,
     state, code_challenge: verifier.codeChallenge, code_challenge_method: CodeChallengeMethod.S256 });
   let finish: (code: string) => void = () => {}, reject: (error: Error) => void = () => {};
@@ -45,6 +45,7 @@ export async function connect(clientPath: string, tokenPath: string, redirectUri
   });
   const timer = setTimeout(() => reject(new Error('OAuth連携が10分以内に完了しませんでした。')), 10 * 60_000);
   try {
+    if (includeActivity) console.log('公開済みの紹介文・プライバシーポリシーを確認してください。歩数、距離、総消費カロリー、アクティブゾーン時間を90日保存し、公開APIと画面でインターネットへ公開します。');
     console.log(includeSleep
       ? '更新した紹介文・プライバシーポリシーを公開済みであることを確認してください。心拍に加え、睡眠の開始・終了、時間、段階・覚醒を90日保存し、公開APIと画面でインターネットに公開します。'
       : '心拍の読み取りを許可してください。');

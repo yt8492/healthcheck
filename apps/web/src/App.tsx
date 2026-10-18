@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { recentRange, retentionStart, type TimeRange, type TimeseriesResponse } from '@healthcheck/core';
 import { dateOnly, dateTime, inputRange, rangeFromUrl, toInput } from './time.js';
+import { ActivityPanel } from './ActivityPanel.js';
 import { SleepPanel } from './SleepPanel.js';
 
 const HeartChart = lazy(() => import('./HeartChart.js'));
@@ -16,7 +17,7 @@ const bpm = (value: number | null | undefined) => value == null ? '—' : value.
 function setUrl(range: TimeRange, replace = false, clearSleep = false) {
   const url = new URL(location.href);
   url.searchParams.set('from', range.from); url.searchParams.set('to', range.to);
-  if (clearSleep) { url.searchParams.delete('sleepFrom'); url.searchParams.delete('sleepTo'); }
+  if (clearSleep) { url.searchParams.delete('sleepFrom'); url.searchParams.delete('sleepTo'); url.searchParams.delete('activityFrom'); url.searchParams.delete('activityTo'); }
   history[replace ? 'replaceState' : 'pushState']({}, '', url);
 }
 
@@ -108,6 +109,8 @@ export function App() {
         <div className="chart-foot"><p><span className="gap-key" aria-hidden="true" />データのない分は線をつなぎません。</p><span>時刻はすべて日本時間</span></div>
         {data && hasData && <details className="data-table"><summary>最後の60分を表で確認する</summary><div className="table-wrap"><table><caption>選択期間の最後の60分。単位：bpm</caption><thead><tr><th>日時（JST）</th><th>平均</th><th>最小</th><th>最大</th></tr></thead><tbody>{data.points.slice(-60).map(point => <tr key={point.time}><td>{dateTime(point.time)}</td><td>{bpm(point.value?.avg)}</td><td>{bpm(point.value?.min)}</td><td>{bpm(point.value?.max)}</td></tr>)}</tbody></table></div></details>}
       </section>
+
+      <ActivityPanel range={range} reload={reload} />
 
       <SleepPanel range={range} reload={reload} showHeart={choose} />
 

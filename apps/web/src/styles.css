@@ -180,3 +180,12 @@ footer a { margin-left: auto; font-size: 10px; color: #748a6f; }
 @media (min-width: 1300px) { .shell { padding: 0 48px; } }
 @media (max-width: 850px) { .shell { padding: 0 24px; } .stats { gap: 10px; } .stat { padding: 16px 14px; } .stat-value { font-size: 28px; } .header-caption { display: none; } }
 @media (max-width: 600px) { .shell { padding: 0 18px; } .masthead { height: 76px; } .brand { font-size: 18px; } .timezone { font-size: 9px; } main { padding-top: 25px; } h1 { font-size: 27px; } .intro { align-items: start; gap: 12px; margin-bottom: 25px; } .lead { font-size: 10px; max-width: 220px; } .sync-info { padding-top: 22px; } .sync-info p { max-width: 114px; line-height: 1.8; } .sync-info strong { display: block; } .status-pill { font-size: 10px; white-space: nowrap; } .demo-note { font-size: 10px; } .demo-note span { display: block; margin: 5px 0 0; } .period-panel { padding: 15px; } .period-top { align-items: start; flex-direction: column; gap: 12px; } .period-title { font-size: 12px; } .period-title > span { margin: 0 7px; } .period-actions { width: 100%; justify-content: space-between; } .stats { grid-template-columns: repeat(2, 1fr); margin-bottom: 18px; } .stat { padding: 15px 17px; } .stat-value { margin-top: 6px; } .chart-panel { padding: 20px 14px 0; } h2 { font-size: 16px; } .chart-meta { flex-wrap: wrap; margin-top: 22px; } .coverage { width: 100%; } .heart-chart, .chart-placeholder { height: 290px; } .chart-foot { flex-direction: column; gap: 7px; line-height: 1.8; } .date-controls form { flex-direction: column; align-items: stretch; gap: 13px; } input { width: 100%; } footer { flex-wrap: wrap; gap: 9px 16px; line-height: 1.8; } footer > span:nth-child(2) { width: 100%; order: 3; } .record-note { margin: 24px 0 30px; } .alert { padding: 12px; font-size: 11px; } }
+
+.activity-panel select { display: block; max-width: 100%; margin-top: .5rem; padding: .6rem; border: 1px solid #b8c9bf; border-radius: .5rem; color: #163d36; background: #fff; font: inherit; }
+.activity-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1rem; margin: 1.5rem 0; }
+.activity-total strong { font-size: 1.5rem; font-weight: 600; }
+.activity-total span, .activity-sync { font-size: .85rem; color: #586b60; line-height: 1.7; }
+.activity-panel .chart-heading { flex-wrap: wrap; }
+.activity-panel { margin-top: 24px; }
+.activity-panel .sleep-presets { border-radius: 12px; }
+.activity-panel .sleep-presets button:last-child { grid-column: 1 / -1; justify-self: start; white-space: nowrap; }

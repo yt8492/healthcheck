@@ -73,13 +73,13 @@ describe('睡眠の保存・同期・API', () => {
   it('睡眠の権限不足でも心拍の同期を完了する', async () => {
     const points = fixturePoints(range);
     const client = new GoogleHealthClient(async url => url.includes('/sleep/') ? new Response('', { status: 403 }) : Response.json(rollupPage(points)));
-    expect(await syncMetrics(async () => client, heart, range, 'all')).toEqual([{ metric: 'heart-rate', ok: true }, { metric: 'sleep', ok: false }]);
+    expect((await syncMetrics(async () => client, heart, range, 'all')).slice(0, 2)).toEqual([{ metric: 'heart-rate', ok: true }, { metric: 'sleep', ok: false }]);
     expect((await heart.state()).lastSuccessAt).not.toBeNull(); expect((await store.state()).error?.code).toBe('access-denied');
     expect(await heart.read(range)).toEqual(points);
   });
   it('心拍の失敗でも睡眠の同期を完了する', async () => {
     const client = new GoogleHealthClient(async url => url.includes('/sleep/') ? Response.json({ dataPoints: [sleepPoint(1)] }) : new Response('', { status: 403 }));
-    expect(await syncMetrics(async () => client, heart, range, 'all')).toEqual([{ metric: 'heart-rate', ok: false }, { metric: 'sleep', ok: true }]);
+    expect((await syncMetrics(async () => client, heart, range, 'all')).slice(0, 2)).toEqual([{ metric: 'heart-rate', ok: false }, { metric: 'sleep', ok: true }]);
     expect((await store.state()).lastSuccessAt).not.toBeNull(); expect((await heart.state()).error?.code).toBe('access-denied');
   });
   it('指標別のロックを持ち、期限切れの保存は拒否する', async () => {

@@ -1,6 +1,6 @@
 # Healthcheck
 
-Google Health APIから本人の心拍・睡眠を取得し、Firestoreに90日保存する公開APIとダッシュボード。心拍は1分の平均・最小・最大と24時間表示、睡眠はセッション・段階・覚醒と最大90日の表示に対応しています。Cloud Runと15分ごとの定期同期を利用します。活動・日別生体指標、長期間の心拍集計は今後追加します。
+Google Health APIから本人の心拍・睡眠・活動を取得し、Firestoreに90日保存する公開APIとダッシュボード。心拍は1分の平均・最小・最大と24時間表示、睡眠はセッション・段階・覚醒と最大90日の表示に対応しています。Cloud Runと15分ごとの定期同期を利用します。活動は歩数・距離・総消費カロリー・アクティブゾーン時間の1分値と最大90日の集計に対応します。日別生体指標、長期間の心拍集計は今後追加します。
 
 ## ローカル起動
 
@@ -31,10 +31,11 @@ GOOGLE_CLOUD_PROJECT=demo-healthcheck FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm
 以下の`YOUR_PROJECT_ID`は接続先のGoogle CloudプロジェクトIDに置き換えてください。Cloud IAM認証と、心拍・睡眠の読み取りに使う本人のOAuth認証は別々に設定します。実際の設定はGitに含めない`.env`と`.local/`に保存します。
 
 1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials)で対象プロジェクトを選び、Google Auth Platformのブランド情報・対象ユーザーを設定します。External / Testingの場合は本人をテストユーザーに追加します。
-2. データアクセスに次の読み取りスコープを追加します。睡眠を取得する前に、更新した紹介ページとプライバシーポリシーを公開し、本人が睡眠の保存・インターネット公開に同意してください。既存の心拍用トークンには睡眠権限がないため、睡眠を追加する場合は再接続が必要です。
+2. データアクセスに次の読み取りスコープを追加します。睡眠・活動を取得する前に、更新した紹介ページとプライバシーポリシーを公開し、本人が各データの保存・インターネット公開に同意してください。既存トークンに追加する権限がない場合は再接続が必要です。
 
    - `https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly`（心拍）
    - `https://www.googleapis.com/auth/googlehealth.sleep.readonly`（睡眠）
+   - `https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly`（歩数・距離・総消費カロリー・アクティブゾーン時間）
 
 3. OAuthクライアントを**ウェブアプリケーション**として作成し、「承認済みのリダイレクトURI」に以下を完全一致で登録します。JavaScript生成元は不要です。
 
@@ -58,10 +59,10 @@ gcloud firestore databases describe --project=YOUR_PROJECT_ID --database='(defau
 7. 本人のFitbitと連携したGoogleアカウントで接続します。コマンドに表示されるURLをブラウザで開いて同意してください。
 
 ```sh
-npm run connect -- --sleep
-# 心拍だけを接続する場合は --sleep を省略
+npm run connect -- --sleep --activity
+# 心拍だけを接続する場合は --sleep と --activity を省略
 # JSONを別の場所に置いた場合
-npm run connect -- --sleep --client /absolute/path/oauth-client.json
+npm run connect -- --sleep --activity --client /absolute/path/oauth-client.json
 ```
 
 コールバックは127.0.0.1でのみ待ち受け、stateとPKCEを検証します。getIdentityによる連携確認に成功してから、選択したOAuthクライアント情報とrefresh tokenを`.local/google-health-tokens.json`へ権限0600で保存します。同期時にはこのファイルを使うため、`--client`で指定したクライアントとの組み合わせが保たれます。アクセス・refresh tokenや本人のIDはログに出しません。
@@ -97,14 +98,15 @@ Google Health APIの`rollUp`に`windowSize: "60s"`を指定し、全ページの
 | GET | 内容 |
 | --- | --- |
 | `/api/v1/timeseries?metric=heart-rate&from=…&to=…&resolution=1m` | 欠損を含む1分値、単位、集計方法、期間統計、同期状態 |
-| `/api/v1/summary?from=…&to=…` | 心拍の期間統計と、`sleep`内に睡眠時間・段階内訳・JSTの起床日別集計・同期状態 |
+| `/api/v1/timeseries?metric=steps&from=…&to=…&resolution=auto` | 活動の区間合計・日別合計・欠損内訳・単位・指標別同期状態。4指標に対応 |
+| `/api/v1/summary?from=…&to=…` | 心拍の期間統計、`sleep`の睡眠内訳、`activity`の4指標の合計・JST日別集計・同期状態 |
 | `/api/v1/sleep?from=…&to=…&cursor=…` | 期間と重なる睡眠を終了日時・ID順に最大50件ずつ取得。詳細の開始・終了は実際の値 |
 | `/api/v1/status` | 最終同期成功と最新測定日時を分けて返す |
 | `/api/v1/health` | プロセスの稼働確認。`/healthz`はローカル互換用 |
 
-日時はタイムゾーン付きRFC 3339、分境界、開始を含む・終了を含まない指定。日時を省略すると直近24時間。1回は最大4,096分、測定から90日以内。`resolution=auto`もこの段階では1mです。不正入力は400、DB障害は503。90日を超えた値は削除ジョブが停止していてもAPIから返しません。読み取りAPIのログインは不要です。
+日時はタイムゾーン付きRFC 3339、分境界、開始を含む・終了を含まない指定。日時を省略すると直近24時間。心拍のtimeseriesは1回最大4,096分、測定から90日以内。心拍の`resolution=auto`は1mです。活動は最大90日で粒度を切り替えます（後述）。不正入力は400、DB障害は503。90日を超えた値は削除ジョブが停止していてもAPIから返しません。読み取りAPIのログインは不要です。
 
-機械可読な契約は`docs/openapi.yaml`にあります。API成功応答は30秒間キャッシュでき、エラー応答はキャッシュしません。同じCloud Runインスタンスでは、同期状態と同じ期間のFirestore読み取りも30秒間共有します。並行要求をまとめ、失敗は保持せず、期間のキャッシュは最大16件です。
+機械可読な契約は`docs/openapi.yaml`にあります。API成功応答は30秒間キャッシュでき、エラー応答はキャッシュしません。同じCloud Runインスタンスでは、同期状態と同じ期間のFirestore読み取りも30秒間共有します。並行要求をまとめ、失敗は保持せず、心拍・睡眠の期間キャッシュは各最大16件、活動は長期間の分値を扱うため指標ごと最大2件です。
 
 ## 睡眠の取得と表示
 
@@ -194,3 +196,24 @@ Firebase Hostingに`health.yt8492.com`をカスタムドメインとして追加
 Google Auth Platformに登録する際は、Markdownを閲覧可能なウェブページとして公開し、ホームページと同じドメインの公開URLを指定します。ホームページからも両文書へのリンクを設けます。[Googleのブランディング掲載要件](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification#application_privacy_policy_link_requirements)
 
 公開準備では、連携前の健康データ取得・公開に関する説明と明示的な同意、ローカル環境を含む認証情報の保存時暗号化を確認します。現行のローカルOAuthファイル保存はJSONとファイル権限の制限であり、アプリによる暗号化は行っていません。文書の作成だけで公開要件への対応が完了するものではありません。[Google Health APIの同意・安全管理要件](https://developers.google.com/health/policies/health-api-developer-user-data-policy)
+
+## 活動の取得と表示
+
+取得開始前に活動を説明した紹介ページとプライバシーポリシーを公開し、本人が取得・90日保存・インターネット公開に同意してから、`npm run connect -- --sleep --activity`で既存の心拍・睡眠と活動を許可します。既存トークンの権限は自動拡張されません。Cloud Runでは`cloud:credentials`でSecretを更新します。位置情報の権限は要求しません。
+
+```sh
+GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID npm run sync:activity
+# 一つだけ再取得する場合。既定48時間、最大7日ずつ
+GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID npm run sync -- --metric steps --from RFC3339 --to RFC3339
+# heart-rate / sleep / steps / distance / total-calories / active-zone-minutesをそれぞれ独立して同期
+GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID npm run sync
+```
+
+- 上流は`rollUp`、`google-wearables`、`windowSize=60s`。歩数は歩、距離はmmからmに換算、総消費カロリーはkcal（基礎代謝込み）、アクティブゾーン時間は上流のゾーン別ポイントの和を使い、再加重しません。
+- `activityHourly/<metric>/hours/<UTC時間>`に60個の値と`presence`（`value` / `omitted` / `missing`）を保存し、`points`はインデックスから除外します。明示的な0は既知値、値の省略・レコード欠損はnullとして区別します。`syncState/<metric>`と`jobLease/<metric>`は指標別です。取得完了範囲は空でも記録し、未取得と欠損を別に扱います。
+- `/api/v1/timeseries?metric=steps&from=…&to=…&resolution=auto`は活動に最大90日対応し、`1m` / `1h` / `1d`を指定できます。`auto`は2日以内が1m、14日以内が1h、それ以上が1d。明示1mは最大4096分。日境界はJSTです。
+- `points[]`は`from/to/total/availableMinutes/omittedMinutes/missingMinutes/totalMinutes`。`total`は既知値の和で、既知値が一つもなければnullです。`summary.days`はJSTの日別合計で、端数日・今日の途中は`partialDay=true`。欠けた分がある合計は完全な1日の合計と同一視しません。
+- `/api/v1/summary`の`activity`に4指標の合計・日別値・単位・状態・取得範囲を追加し、`/api/v1/status`の`metrics`に指標別状態を返します。訂正・削除は全ページの取得に成功した範囲だけ反映し、部分失敗では他指標を継続し、Jobは終了コード1にします。失敗した指標でも期限削除を試行します。
+- 画面は心拍と同じ期間から開始し、活動だけの1日・7日・30日・90日・任意期間も選択できます。異なる単位を同じ軸に重ねず、指標選択で軸を切り替えます。期間・指標は`activityFrom/activityTo/activityMetric`に保存します。
+
+仕様と実データを分けた検証記録は[活動の検証](./docs/activity-validation.md)を参照してください。

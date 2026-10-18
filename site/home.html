@@ -1,13 +1,13 @@
 <section class="hero" aria-labelledby="intro-title">
   <p class="eyebrow">PERSONAL HEALTH RECORD</p>
   <h1 id="intro-title">健康の記録を、<br>振り返る。</h1>
-  <p class="lead">日々の心拍と睡眠を記録して、あとから体調の変化を見つめる。<br class="desktop-break">healthcheckは、マヤミト本人のFitbitデータを振り返るための個人サービスです。</p>
+  <p class="lead">日々の心拍・睡眠・活動を記録して、あとから体調の変化を見つめる。<br class="desktop-break">healthcheckは、マヤミト本人のFitbitデータを振り返るための個人サービスです。</p>
   <div class="hero-links">
     <a class="primary-link" href="#about">サービスについて <span aria-hidden="true">↓</span></a>
     <a href="/">ダッシュボードを見る <span aria-hidden="true">↗</span></a>
   </div>
   <div class="record-facts" aria-label="現在の記録方式">
-    <div><strong>心拍・睡眠</strong><span>現在の取得指標</span></div>
+    <div><strong>心拍・睡眠・活動</strong><span>現在の取得指標</span></div>
     <div><strong>1分</strong><span>平均・最小・最大を保存</span></div>
     <div><strong>90日</strong><span>記録を振り返る期間</span></div>
   </div>
@@ -16,8 +16,9 @@
 <section class="section-grid" id="about" aria-labelledby="about-title">
   <div><p class="eyebrow">ABOUT</p><h2 id="about-title">どんなサービス？</h2></div>
   <div class="section-body">
-    <p>Google Health APIを通じて、運営者本人のFitbit等の心拍・睡眠データを取得・保存し、グラフや集計で振り返ります。1分ごとの平均・最小・最大を直近90日分保存し、秒単位の元データは保存しません。</p>
+    <p>Google Health APIを通じて、運営者本人のFitbit等の心拍・睡眠・活動データを取得・保存し、グラフや集計で振り返ります。1分ごとの平均・最小・最大を直近90日分保存し、秒単位の元データは保存しません。</p>
     <p>ダッシュボードでは心拍の推移と欠損に加え、睡眠の段階・覚醒、JSTの起床日ごとの内訳を確認できます。睡眠は直近90日以内の期間を指定でき、詳細には実際の開始・終了日時を表示します。取得できなかった時間を心拍数0として扱うことはありません。</p>
+    <p>活動は1分ごとの歩数・距離（m）・総消費カロリー（kcal、基礎代謝を含む）・アクティブゾーン時間（強度を反映したポイント数）を90日保存します。JSTの日別合計と短期・長期グラフで振り返り、今日や指定期間の端は途中集計として表示します。明示的な0と値の省略・レコード欠損を区別し、未取得を0に補いません。位置情報・移動経路は取得しません。</p>
     <p>このサイトはサービスの紹介と、データの取扱い・利用条件の案内を提供しています。</p>
   </div>
 </section>
@@ -25,8 +26,8 @@
 <section class="section-grid" aria-labelledby="data-title">
   <div><p class="eyebrow">DATA &amp; PRIVACY</p><h2 id="data-title">何のために、<br>データを使う？</h2></div>
   <div class="section-body">
-    <p>Googleアカウントへのアクセス権限は、本人の健康記録を取得し、同期・保存・表示するために使用します。健康指標と睡眠の読み取り権限を要求し、Google Health上のデータの変更は行いません。</p>
-    <p>本人が公開を指定した心拍数と測定日時、睡眠の開始・終了・時間・段階・覚醒は、公開ダッシュボードと公開APIで不特定多数に提供する方針です。公開された情報は閲覧者が保存でき、公開停止後も第三者のコピーが残る場合があります。</p>
+    <p>Googleアカウントへのアクセス権限は、本人の健康記録を取得し、同期・保存・表示するために使用します。健康指標・睡眠・活動の読み取り権限を要求し、Google Health上のデータの変更は行いません。</p>
+    <p>本人が公開を指定した心拍数と測定日時、睡眠の開始・終了・時間・段階・覚醒、歩数・距離・総消費カロリー・アクティブゾーン時間と測定日時・日別合計は、公開ダッシュボードと公開APIで不特定多数に提供する方針です。公開された情報は閲覧者が保存でき、公開停止後も第三者のコピーが残る場合があります。</p>
     <div class="notice"><strong>データを提供するのは運営者本人だけです。</strong><p>一般の閲覧者のGoogleアカウント連携や、健康データのアップロードは受け付けていません。閲覧者がGoogleへのアクセス権限を許可する必要はありません。</p></div>
     <p>取得した健康データを広告配信、販売、信用審査、融資判断、AIモデルの学習に利用しません。GoogleのユーザーデータポリシーとLimited Useの要件に従って取り扱います。</p>
     <a class="text-link" href="../privacy/">取得・保存・公開・削除の方針を確認する <span aria-hidden="true">→</span></a>

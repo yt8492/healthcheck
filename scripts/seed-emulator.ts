@@ -1,5 +1,5 @@
 import { Firestore } from '@google-cloud/firestore';
-import { DAY, recentRange } from '@healthcheck/core';
+import { ACTIVITY_METRICS, DAY, emptyActivity, recentRange, retentionStart } from '@healthcheck/core';
 import { GoogleHealthClient } from '@healthcheck/google-health';
 import { HeartStore } from '@healthcheck/storage';
 import { syncHeart } from '../apps/sync/src/sync.js';
@@ -20,5 +20,16 @@ try {
     const part = { from: new Date(from).toISOString(), to: new Date(Math.min(from + 7 * DAY, Date.parse(sleepRange.to))).toISOString() };
     await store.sleep.replace(part, fixtureSleep(part), await store.sleep.acquire());
   }
+  for (const metric of ACTIVITY_METRICS) {
+    const activity = store.activity(metric);
+    for (let from = retentionStart(Date.now()); from < Date.parse(sleepRange.to); from += 7 * DAY) {
+      const part = { from: new Date(from).toISOString(), to: new Date(Math.min(from + 7 * DAY, Date.parse(sleepRange.to))).toISOString() };
+      const scale = metric === 'distance' ? 0.123 : metric === 'total-calories' ? 1.25 : 1;
+      const points = emptyActivity(part).map((p, i) => i % 73 === 0 ? p : i % 61 === 0 ? { ...p, presence: 'omitted' as const, value: null }
+        : { ...p, presence: 'value' as const, value: (i % 7) * scale });
+      await activity.replace(part, points, await activity.acquire());
+    }
+  }
+  console.log('Emulatorに90日分の架空の活動4指標を投入しました。');
   console.log('Emulatorに90日分の架空の夜間睡眠・昼寝を投入しました。');
 } finally { await store.db.terminate(); }

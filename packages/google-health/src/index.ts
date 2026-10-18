@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
-import { normalizeSleep, type SleepSession } from '@healthcheck/core';
+import { normalizeSleep, emptyActivity, activitySpecs, type ActivityMetric, type ActivityPoint, type SleepSession } from '@healthcheck/core';
 import { MINUTE, SOURCE_FAMILY, emptyPoints, heartValueSchema, minuteTime, type HeartPoint, type TimeRange, type SyncErrorCode } from '@healthcheck/core';
 
 const ENDPOINT = 'https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:rollUp';
 export const HEART_SCOPE = 'https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly';
+export const ACTIVITY_SCOPE = 'https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly';
 export const SLEEP_SCOPE = 'https://www.googleapis.com/auth/googlehealth.sleep.readonly';
 export type AuthorizedFetch = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -86,6 +87,52 @@ export class GoogleHealthClient {
       }
     } while (pageToken);
     return [...sessions.values()].sort((a, b) => a.endTime.localeCompare(b.endTime) || a.id.localeCompare(b.id));
+  }
+
+  async activity(metric: ActivityMetric, range: TimeRange): Promise<ActivityPoint[]> {
+    const expected = emptyActivity(range), values = new Map<string, ActivityPoint>(), seen = new Set<string>();
+    let pageToken: string | undefined;
+    do {
+      const body = await this.call(`https://health.googleapis.com/v4/users/me/dataTypes/${metric}/dataPoints:rollUp`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ range: { startTime: range.from, endTime: range.to }, windowSize: '60s', pageSize: 10000,
+          dataSourceFamily: SOURCE_FAMILY, ...(pageToken ? { pageToken } : {}) }),
+      });
+      try {
+        const page = z.object({ rollupDataPoints: z.array(z.record(z.string(), z.unknown())).default([]), nextPageToken: z.string().optional() }).parse(body);
+        for (const raw of page.rollupDataPoints) {
+          const time = minuteTime(raw.startTime), end = minuteTime(raw.endTime);
+          if (Date.parse(end) - Date.parse(time) !== MINUTE || time < range.from || end > range.to || values.has(time)) throw new Error();
+          const payload = raw[activitySpecs[metric].field];
+          let value: number | null = null;
+          if (payload !== undefined) {
+            const data = z.record(z.string(), z.unknown()).parse(payload);
+            const fields = metric === 'steps' ? ['countSum'] : metric === 'distance' ? ['millimetersSum'] : metric === 'total-calories' ? ['kcalSum']
+              : ['sumInCardioHeartZone', 'sumInPeakHeartZone', 'sumInFatBurnHeartZone'];
+            // 省略を未取得の0へ変換しない。AZMの既存フィールドは既に強度を反映したポイント数。
+            const present = fields.filter(field => data[field] !== undefined);
+            if (present.length) {
+              value = present.reduce((sum, field) => {
+                const rawValue = data[field];
+                if (metric !== 'total-calories' && !(typeof rawValue === 'string' && /^\d+$/.test(rawValue))) throw new Error();
+                const n = metric === 'total-calories' ? z.number().finite().nonnegative().parse(rawValue) : Number(rawValue);
+                if (!Number.isFinite(n) || n < 0 || (metric !== 'total-calories' && !Number.isSafeInteger(n))) throw new Error();
+                return sum + n;
+              }, 0);
+              if (!Number.isFinite(value) || (metric !== 'total-calories' && !Number.isSafeInteger(value))) throw new Error();
+              if (metric === 'distance') value /= 1000;
+            }
+          }
+          values.set(time, value === null ? { time, value, presence: 'omitted' } : { time, value, presence: 'value' });
+        }
+        pageToken = page.nextPageToken || undefined;
+        if (pageToken) {
+          if (seen.has(pageToken) || seen.size >= 100) throw new Error();
+          seen.add(pageToken);
+        }
+      } catch { throw new HealthApiError('invalid-upstream-data', '活動の値・単位・区間・ページングの整合性を確認できません。'); }
+    } while (pageToken);
+    return expected.map(p => values.get(p.time) ?? p);
   }
 
   async heartRate(range: TimeRange): Promise<HeartPoint[]> {

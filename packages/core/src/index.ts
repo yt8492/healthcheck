@@ -1,5 +1,6 @@
 import { z } from 'zod';
 export * from './sleep.js';
+export * from './activity.js';
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -22,7 +23,7 @@ export type SyncState = {
   error: { code: SyncErrorCode; at: string } | null;
 };
 export type PublicStatus = SyncState & {
-  metric: 'heart-rate' | 'sleep';
+  metric: 'heart-rate' | 'sleep' | import('./activity.js').ActivityMetric;
   environment: 'emulator' | 'production';
   sourceFamily: string;
   state: 'not-synced' | 'ok' | 'delayed' | 'error';

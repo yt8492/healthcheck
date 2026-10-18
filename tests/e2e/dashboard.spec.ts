@@ -28,6 +28,7 @@ test('24時間の記録・期間移動・URL復元・日時指定', async ({ pag
 
 test('未同期の状態では架空の値を作らない', async ({ page }) => {
   await page.route('**/api/v1/timeseries?*', async route => {
+    if (new URL(route.request().url()).searchParams.get('metric') !== 'heart-rate') { await route.continue(); return; }
     const original = await route.fetch(); const body = await original.json();
     await route.fulfill({ json: { ...body, points: body.points.map((p: { time: string }) => ({ ...p, value: null })),
       summary: { avg: null, min: null, max: null, availableMinutes: 0, totalMinutes: 1440, latest: null },
@@ -40,7 +41,7 @@ test('未同期の状態では架空の値を作らない', async ({ page }) => 
 });
 
 test('DB障害をデータなしとして表示しない', async ({ page }) => {
-  await page.route('**/api/v1/timeseries?*', route => route.fulfill({ status: 503, json: { error: { code: 'storage-unavailable' } } }));
+  await page.route('**/api/v1/timeseries?*', route => new URL(route.request().url()).searchParams.get('metric') === 'heart-rate' ? route.fulfill({ status: 503, json: { error: { code: 'storage-unavailable' } } }) : route.continue());
   await page.goto('/');
   await expect(page.getByRole('alert')).toContainText('記録を読み取れません');
   await expect(page.getByRole('heading', { name: '記録を表示できません' })).toBeVisible();
