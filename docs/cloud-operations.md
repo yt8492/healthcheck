@@ -54,7 +54,7 @@ npx firebase deploy --only hosting --project YOUR_PROJECT_ID
 
 `health.yt8492.com`は既存のHostingサイトに追加し、Cloudflareの`health`のCNAMEをHostingが指定する`healthcheck-511223.web.app`へ向ける。プロキシは「DNSのみ」、TTLは自動にする。CNAMEによって所有権も確認できるため、同名の所有権TXTは併設しない。証明書用のTXTが指定された場合は`_acme-challenge.health`に最新の値を登録する。
 
-`ownershipState=OWNERSHIP_ACTIVE`と`cert.state=CERT_ACTIVE`を確認し、新ドメインの正規HTTPS接続でダッシュボード・文書・APIを検証してから、旧`healthcheck.yt8492.com`のCustomDomainの`redirectTarget`を`health.yt8492.com`に更新する。旧ドメインのDNSと証明書は転送のため保持する。プロジェクト・Hostingサイト・Cloud Runのリソース名は変更しない。
+`ownershipState=OWNERSHIP_ACTIVE`と`cert.state=CERT_ACTIVE`を確認し、新ドメインの正規HTTPS接続でダッシュボード・文書・APIを検証する。正規URLは`health.yt8492.com`。旧`healthcheck.yt8492.com`のCustomDomain登録は削除済みで、Hostingの有効なドメイン一覧には含まれない。旧ドメイン用のDNSレコードは変更していない。プロジェクト・Hostingサイト・Cloud Runのリソース名は変更しない。
 
 ### 他サービスから配信先も移す場合
 

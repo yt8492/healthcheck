@@ -185,7 +185,7 @@ APIの有効化、専用サービスアカウントと権限、認証情報のSe
 npx firebase deploy --only hosting --project YOUR_PROJECT_ID
 ```
 
-Firebase Hostingに`health.yt8492.com`をカスタムドメインとして追加します。Cloudflareの`health`をHostingが指定するCNAMEへ向け、プロキシは「DNSのみ」、TTLは自動にします。所有権と証明書の有効化、画面とAPIの動作確認後に、旧`healthcheck.yt8492.com`のHosting設定を新ドメインへの301転送に変更します。既存の`yt8492.com`のサイトや他のDNSレコードは変更しません。[Hostingのカスタムドメイン設定](https://firebase.google.com/docs/hosting/custom-domain)
+Firebase Hostingに`health.yt8492.com`をカスタムドメインとして追加します。Cloudflareの`health`をHostingが指定するCNAMEへ向け、プロキシは「DNSのみ」、TTLは自動にします。所有権と証明書の有効化後、画面とAPIの動作を確認します。旧`healthcheck.yt8492.com`のHosting登録は削除済みです。既存の`yt8492.com`のサイトや他のDNSレコードは変更しません。[Hostingのカスタムドメイン設定](https://firebase.google.com/docs/hosting/custom-domain)
 
 ブランディングの所有権確認は、Google Cloudプロジェクトの所有者アカウントでGoogle Search Consoleに`yt8492.com`のドメインプロパティを追加し、指定されたDNSのTXTレコードで行います。Hosting側のドメイン確認とSearch Consoleの所有権確認は別の手続です。
 
