@@ -37,10 +37,13 @@ h1 { font-size: 31px; font-weight: 600; letter-spacing: .03em; margin: 8px 0 11p
 .sync-info p { font-size: 10px; color: #879187; margin-top: 9px; }
 .sync-info strong { font-weight: 400; margin-left: 8px; color: #677569; font-variant-numeric: tabular-nums; }
 .period-panel { border: 1px solid var(--border); background: #fff; border-radius: 10px; padding: 18px 23px 14px; margin-bottom: 20px; }
-.period-top { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.period-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
 .period-title { font-size: 14px; margin-top: 6px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .period-title > span { margin: 0 13px; color: #aab4a9; }
-.period-actions { display: flex; gap: 12px; }
+.period-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.heart-presets { display: flex; flex-wrap: wrap; gap: 5px; }
+.heart-resolution { display: flex; align-items: center; gap: 12px; margin-top: 16px; font-size: 12px; }
+.heart-resolution select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: inherit; font: inherit; }
 .preset { color: #335f46; border-color: #bdcebb; background: #f3f7ef; white-space: nowrap; }
 .arrows { display: flex; gap: 4px; }
 .arrows button { width: 35px; padding: 8px; font-size: 15px; }

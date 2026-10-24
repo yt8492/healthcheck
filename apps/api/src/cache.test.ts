@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { blankState, emptyPoints, type TimeRange } from '@healthcheck/core';
+import { blankState, bucketHeartPoints, emptyPoints, type HeartResolution, type TimeRange } from '@healthcheck/core';
 import { cacheReads } from './cache.js';
 
 const range = { from: '2026-10-12T00:00:00Z', to: '2026-10-12T00:01:00Z' };
@@ -32,5 +32,17 @@ describe('公開APIの読み取りキャッシュ', () => {
     await cached.read({ ...range, to: '2026-10-12T00:02:00Z' });
     await cached.read(range);
     expect(db.read).toHaveBeenCalledTimes(3);
+  });
+  it('心拍の集計キャッシュは粒度を区別し、並行要求・失敗・有効期限を扱う', async () => {
+    let now = 0;
+    const readDisplay = vi.fn(async (r: TimeRange, resolution: HeartResolution) => bucketHeartPoints(emptyPoints(r), r, resolution));
+    const cached = cacheReads({ ...source(), readDisplay }, () => now);
+    await Promise.all([cached.readDisplay!(range, '1h'), cached.readDisplay!(range, '1h'), cached.readDisplay!(range, '1d')]);
+    expect(readDisplay).toHaveBeenCalledTimes(2);
+    now = 30_000;
+    readDisplay.mockRejectedValueOnce(new Error('unavailable'));
+    await expect(cached.readDisplay!(range, '1h')).rejects.toThrow('unavailable');
+    await expect(cached.readDisplay!(range, '1h')).resolves.toBeTruthy();
+    expect(readDisplay).toHaveBeenCalledTimes(4);
   });
 });

@@ -160,7 +160,7 @@ async function main() {
     '--role=roles/secretmanager.secretAccessor', '--format=none']);
   const versions = json<{ state: string }[]>(['secrets', 'versions', 'list', secret]);
   if (!versions.some(version => version.state === 'ENABLED')) await uploadCredentials();
-  for (const [collection, fieldName] of [['seriesHourly', 'points'], ['sleepSessions', 'stages'], ['hours', 'points']] as const) {
+  for (const [collection, fieldName] of [['seriesHourly', 'points'], ['sleepSessions', 'stages'], ['hours', 'points'], ['heartDisplayHourly', 'totals'], ['heartDisplayHourly', 'fiveMinutes'], ['heartDisplayDaily', 'totals']] as const) {
     const field = json<{ indexConfig?: { usesAncestorConfig?: boolean; indexes?: unknown[] } }>([
       'firestore', 'indexes', 'fields', 'describe', fieldName, `--collection-group=${collection}`, '--database=(default)',
     ]);

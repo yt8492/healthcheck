@@ -3,13 +3,14 @@ import compress from '@fastify/compress';
 import serveStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ACTIVITY_METRICS, activityBuckets, activityCoverage, activityResolution, activitySpecs, emptyActivity, isActivityMetric, summarizeActivity, AGGREGATION, DAY, InputError, blankState, publicStatus, recentRange, sleepCoverage, summarize, summarizeSleep, validateRange,
+import { ACTIVITY_METRICS, activityBuckets, activityCoverage, activityResolution, activitySpecs, emptyActivity, isActivityMetric, summarizeActivity, AGGREGATION, DAY, InputError, blankState, bucketHeartPoints, heartResolution, publicStatus, recentRange, sleepCoverage, summarizeSleep, validateRange,
+  type HeartDisplay, type HeartResolution,
   type ActivityMetric, type ActivityPoint, type HeartPoint, type SleepSession, type SyncState, type TimeRange } from '@healthcheck/core';
 import { cacheReads } from './cache.js';
 
 export type SleepReadStore = { state(): Promise<SyncState>; read(range: TimeRange): Promise<SleepSession[]> };
 export type ActivityReadStore = { state(): Promise<SyncState>; read(range: TimeRange): Promise<ActivityPoint[]> };
-export type ReadStore = { emulator: boolean; state(): Promise<SyncState>; read(range: TimeRange): Promise<HeartPoint[]>; sleep?: SleepReadStore; activity?(metric: ActivityMetric): ActivityReadStore };
+export type ReadStore = { emulator: boolean; state(): Promise<SyncState>; read(range: TimeRange): Promise<HeartPoint[]>; readDisplay?(range: TimeRange, resolution: HeartResolution): Promise<HeartDisplay>; sleep?: SleepReadStore; activity?(metric: ActivityMetric): ActivityReadStore };
 
 export async function createApp(source: ReadStore, options: { now?: () => number; staticRoot?: string; logger?: boolean } = {}) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }) });
@@ -34,9 +35,11 @@ export async function createApp(source: ReadStore, options: { now?: () => number
     if (!query || typeof query !== 'object') throw new InputError('クエリが不正です。');
     const q = query as Record<string, unknown>;
     if (q.metric !== undefined && q.metric !== 'heart-rate' && !(activity && isActivityMetric(q.metric))) throw new InputError('metricはheart-rateまたは対応する活動指標を指定してください。');
-    if (!activity && q.resolution !== undefined && q.resolution !== '1m' && q.resolution !== 'auto') throw new InputError('この到達点ではresolution=1mに対応しています。');
     if (q.from === undefined && q.to === undefined) return recentRange(clock());
     return validateRange(q.from, q.to, clock(), long ? 90 * 24 * 60 : undefined);
+  }
+  async function heartData(range: TimeRange, resolution: HeartResolution) {
+    return store.readDisplay ? store.readDisplay(range, resolution) : bucketHeartPoints(await store.read(range), range, resolution);
   }
   async function sleepData(range: TimeRange) {
     const [sessions, state] = await Promise.all([store.sleep?.read(range) ?? [], store.sleep?.state() ?? blankState()]);
@@ -64,10 +67,10 @@ export async function createApp(source: ReadStore, options: { now?: () => number
       const data = await activityData(q.metric, range);
       return { ...range, ...data, resolution, points: activityBuckets(data.points, range, resolution) };
     }
-    const range = rangeOf(req.query);
-    const [points, state] = await Promise.all([store.read(range), store.state()]);
-    return { ...range, metric: 'heart-rate', resolution: '1m', unit: 'bpm', aggregation: AGGREGATION,
-      points, summary: summarize(points), status: publicStatus(state, clock(), store.emulator) };
+    const range = rangeOf(req.query, true), resolution = heartResolution(q.resolution, range);
+    const [display, state] = await Promise.all([heartData(range, resolution), store.state()]);
+    return { ...range, metric: 'heart-rate', resolution, unit: 'bpm', aggregation: AGGREGATION,
+      ...display, status: publicStatus(state, clock(), store.emulator) };
   });
   app.get('/api/v1/summary', async req => {
     const range = rangeOf(req.query, true);
@@ -75,9 +78,9 @@ export async function createApp(source: ReadStore, options: { now?: () => number
       const { points: _points, ...data } = await activityData(metric, range);
       return [metric, data];
     })));
-    const [points, state, sleep] = await Promise.all([store.read(range), store.state(), sleepData(range)]);
+    const [display, state, sleep] = await Promise.all([heartData(range, '1d'), store.state(), sleepData(range)]);
     return { ...range, metric: 'heart-rate', unit: 'bpm', aggregation: AGGREGATION,
-      ...summarize(points), activity, status: publicStatus(state, clock(), store.emulator),
+      ...display.summary, activity, status: publicStatus(state, clock(), store.emulator),
       sleep: { ...summarizeSleep(sleep.sessions, range), unit: 'minutes', status: sleep.status, coverage: sleep.coverage } };
   });
   app.get('/api/v1/sleep', async req => {

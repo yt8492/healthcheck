@@ -1,6 +1,7 @@
 import { z } from 'zod';
 export * from './sleep.js';
 export * from './activity.js';
+export * from './heart.js';
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -40,9 +41,9 @@ export type HeartSummary = {
 export type TimeseriesResponse = TimeRange & {
   metric: 'heart-rate';
   unit: 'bpm';
-  resolution: '1m';
+  resolution: import('./heart.js').HeartResolution;
   aggregation: typeof AGGREGATION;
-  points: HeartPoint[];
+  points: import('./heart.js').HeartBucket[];
   summary: HeartSummary;
   status: PublicStatus;
 };

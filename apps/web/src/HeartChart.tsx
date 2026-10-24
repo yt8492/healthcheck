@@ -3,12 +3,12 @@ import * as echarts from 'echarts/core';
 import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
-import { type HeartPoint } from '@healthcheck/core';
+import { DAY, heartResolutionLabels, type HeartBucket, type HeartResolution } from '@healthcheck/core';
 import { dateTime, timeOnly } from './time.js';
 
 echarts.use([LineChart, GridComponent, TooltipComponent, SVGRenderer]);
 
-export function HeartChart({ points }: { points: HeartPoint[] }) {
+export function HeartChart({ points, resolution }: { points: HeartBucket[]; resolution: HeartResolution }) {
   const element = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!element.current) return;
@@ -21,14 +21,14 @@ export function HeartChart({ points }: { points: HeartPoint[] }) {
           const items = params as { dataIndex: number }[];
           const point = points[items[0]?.dataIndex ?? -1];
           if (!point) return '';
-          return `${dateTime(point.time)} JST<br/>${point.value
+          return `${dateTime(point.time)} ～ ${dateTime(point.to)} JST<br/>${point.value
             ? `<strong>${point.value.avg.toFixed(1)} bpm</strong><br/>最小 ${point.value.min.toFixed(1)} / 最大 ${point.value.max.toFixed(1)}`
-            : 'データなし'}`;
+            : 'データなし'}<br/>取得できた分 ${point.availableMinutes} / ${point.totalMinutes}`;
         },
       },
       xAxis: { type: 'time', min: points[0]?.time, max: points.at(-1)?.time, splitNumber: 6,
         axisLine: { lineStyle: { color: '#d9e0d9' } }, axisTick: { show: false },
-        axisLabel: { color: '#68756c', hideOverlap: true, formatter: (value: number) => timeOnly(value) },
+        axisLabel: { color: '#68756c', hideOverlap: true, formatter: (value: number) => points.length && Date.parse(points.at(-1)!.to) - Date.parse(points[0]!.time) > DAY ? dateTime(new Date(value).toISOString()).split(' ')[0] : timeOnly(value) },
         splitLine: { show: false }, axisPointer: { lineStyle: { color: '#547a6c', type: 'dashed' } },
       },
       yAxis: { type: 'value', name: 'bpm', nameTextStyle: { color: '#68756c', align: 'right', padding: [0, 8, 0, 0] },
@@ -41,7 +41,7 @@ export function HeartChart({ points }: { points: HeartPoint[] }) {
         { name: '最小〜最大', type: 'line', stack: 'range', stackStrategy: 'all', symbol: 'none', lineStyle: { opacity: 0 },
           areaStyle: { color: '#91b7a5', opacity: 0.28 }, emphasis: { disabled: true },
           data: points.map(p => [p.time, p.value ? p.value.max - p.value.min : null]) },
-        { name: '1分平均', type: 'line', symbol: 'none', connectNulls: false,
+        { name: `${heartResolutionLabels[resolution]}平均`, type: 'line', symbol: points.length === 1 ? 'circle' : 'none', connectNulls: false,
           lineStyle: { color: '#236653', width: 1.7 }, itemStyle: { color: '#236653' },
           data: points.map(p => [p.time, p.value?.avg ?? null]) },
       ],
@@ -49,8 +49,8 @@ export function HeartChart({ points }: { points: HeartPoint[] }) {
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(element.current);
     return () => { observer.disconnect(); chart.dispose(); };
-  }, [points]);
-  return <div className="heart-chart" ref={element} role="img" aria-label="心拍の1分平均と最小・最大のグラフ。下の表でも値を確認できます。" />;
+  }, [points, resolution]);
+  return <div className="heart-chart" ref={element} role="img" aria-label={`心拍の${heartResolutionLabels[resolution]}平均と最小・最大のグラフ。下の表でも値を確認できます。`} />;
 }
 
 export default HeartChart;

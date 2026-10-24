@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { ACTIVITY_METRICS, isActivityMetric, InputError, recentRange, validateRange } from '@healthcheck/core';
+import { ACTIVITY_METRICS, DAY, floorMinute, isActivityMetric, InputError, recentRange, retentionStart, validateRange } from '@healthcheck/core';
 import { GoogleHealthClient, HealthApiError } from '@healthcheck/google-health';
 import { loadAuthorizedFetch } from '@healthcheck/google-health/credentials';
 import { createStore, LeaseBusyError, LeaseExpiredError } from '@healthcheck/storage';
@@ -13,16 +13,28 @@ async function main() {
   } });
   const command = positionals[0];
   if (values.help || !command) {
-    console.log('connect [--client /path/to/oauth-client.json] [--sleep] [--activity]\nsync [--metric heart-rate|sleep|activity|steps|distance|total-calories|active-zone-minutes|all] [--from RFC3339 --to RFC3339]  ※既定は直近48時間、最大7日\nprune'); return;
+    console.log('connect [--client /path/to/oauth-client.json] [--sleep] [--activity]\nsync [--metric heart-rate|sleep|activity|steps|distance|total-calories|active-zone-minutes|all] [--from RFC3339 --to RFC3339]  ※既定は直近48時間、最大7日\naggregate-heart [--from RFC3339 --to RFC3339]  ※保存済み心拍から表示集計を再構築。既定90日\nprune'); return;
   }
   if (command === 'connect') {
     await connect(values.client ?? process.env.GOOGLE_OAUTH_CLIENT_FILE ?? '.local/oauth-client.json',
       process.env.GOOGLE_HEALTH_TOKEN_FILE ?? '.local/google-health-tokens.json',
       process.env.GOOGLE_OAUTH_REDIRECT_URI ?? 'http://127.0.0.1:8787/oauth/callback', values.sleep, values.activity); return;
   }
-  if (!['sync', 'prune'].includes(command)) throw new Error('不明なコマンドです。--helpを参照してください。');
+  if (!['sync', 'prune', 'aggregate-heart'].includes(command)) throw new Error('不明なコマンドです。--helpを参照してください。');
   const store = createStore();
   try {
+    if (command === 'aggregate-heart') {
+      if (Boolean(values.from) !== Boolean(values.to)) throw new InputError('--fromと--toは両方指定してください。');
+      const now = Date.now();
+      const range = validateRange(values.from ?? new Date(retentionStart(now)).toISOString(), values.to ?? new Date(floorMinute(now)).toISOString(), now, 90 * 1440);
+      let updates = 0;
+      for (let from = Date.parse(range.from); from < Date.parse(range.to); from += 7 * DAY) {
+        const part = { from: new Date(from).toISOString(), to: new Date(Math.min(from + 7 * DAY, Date.parse(range.to))).toISOString() };
+        updates += await store.rebuildAggregates(part);
+      }
+      console.log(`心拍の表示用集計を再構築しました。更新${updates}件。分値と最終同期成功時刻は維持しました。`);
+      return;
+    }
     if (command === 'prune') {
       const results = await Promise.allSettled([store.prune(), store.sleep.prune(), ...ACTIVITY_METRICS.map(metric => store.activity(metric).prune())]);
       results.forEach((result, i) => console.log(`${['heart-rate', 'sleep', ...ACTIVITY_METRICS][i]}の期限削除: ${result.status === 'fulfilled' ? `${result.value}件` : '失敗'}`));
