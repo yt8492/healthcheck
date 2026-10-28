@@ -18,8 +18,7 @@ nav { display: flex; flex-wrap: wrap; gap: 22px; font-size: 12px; }
 nav a { text-decoration: none; }
 nav a:hover { text-decoration: underline; }
 .hero { padding: 78px 0 62px; }
-.eyebrow { color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .16em; }
-h1 { font-size: clamp(38px, 5vw, 61px); font-weight: 600; line-height: 1.5; letter-spacing: .06em; margin: 18px 0 25px; }
+h1 { font-size: clamp(28px, 4vw, 44px); font-weight: 600; line-height: 1.5; letter-spacing: .06em; margin: 0 0 25px; }
 .lead { font-size: 15px; color: var(--muted); }
 .hero-links { display: flex; align-items: center; flex-wrap: wrap; gap: 26px; margin-top: 30px; font-size: 13px; }
 .hero-links a { text-decoration: none; }
@@ -66,7 +65,6 @@ dd { margin: 0; overflow-wrap: anywhere; }
   nav { gap: 18px; }
   .hero { padding: 46px 0 34px; }
   .lead { font-size: 14px; }
-  .desktop-break { display: none; }
   .hero-links { align-items: flex-start; gap: 23px; }
   .record-facts { margin-top: 38px; padding: 22px 0; }
   .record-facts div { padding: 0 12px; }

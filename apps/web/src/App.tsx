@@ -73,13 +73,12 @@ export function App() {
   return <div className="shell">
     <header className="masthead">
       <a className="brand" href="/" aria-label="Healthcheck 直近24時間"><span className="brand-mark" aria-hidden="true">h<span>·</span></span><span>healthcheck</span></a>
-      <span className="header-caption">日々のからだの記録</span>
       <span className="timezone">Asia/Tokyo <span>JST</span></span>
     </header>
     <main>
       {status?.environment === 'emulator' && <div className="demo-note" role="note">Emulatorの架空データ <span>画面と保存処理を確認するための記録です。</span></div>}
       <section className="intro">
-        <div><p className="eyebrow">YOUR DAILY RECORD</p><h1>心拍の記録</h1><p className="lead">1分ごとの記録から、からだの変化を振り返る。</p></div>
+        <h1>心拍の記録</h1>
         <div className="sync-info"><span className={`status-pill ${status?.state === 'error' ? 'warning' : ''}`}><span aria-hidden="true" />{fetchError ? '読み取りエラー' : statusLabel}</span><p>最終同期 <strong>{status?.lastSuccessAt ? dateTime(status.lastSuccessAt) : '未同期'}</strong></p></div>
       </section>
 
@@ -108,7 +107,7 @@ export function App() {
       </section>
 
       <section className="chart-panel" aria-labelledby="chart-title" aria-busy={loading}>
-        <div className="chart-heading"><div><p className="eyebrow">HEART RATE</p><h2 id="chart-title">時間ごとの変化</h2><p>{dateOnly(range.from)} · {resolutionLabel}単位</p></div><button className="text-button" disabled={loading} onClick={() => setReload(v => v + 1)}><span aria-hidden="true">↻</span> 記録を更新</button></div>
+        <div className="chart-heading"><div><h2 id="chart-title">時間ごとの変化</h2><p>{dateOnly(range.from)} · {resolutionLabel}単位</p></div><button className="text-button" disabled={loading} onClick={() => setReload(v => v + 1)}><span aria-hidden="true">↻</span> 記録を更新</button></div>
         <div className="chart-meta"><div className="legend"><span><i className="line" />{resolutionLabel}平均</span><span><i className="band" />最小〜最大</span></div><span className="coverage">取得できた分 <strong>{data?.summary.availableMinutes ?? '—'}</strong> / {data?.summary.totalMinutes ?? '—'}<span>（{coverage}%）</span></span></div>
         {loading ? <div className="chart-placeholder" role="status"><span className="loader" /><p>記録を読み込んでいます</p></div>
           : hasData && data ? <Suspense fallback={<div className="chart-placeholder" role="status">グラフを準備しています</div>}><HeartChart points={data.points} resolution={data.resolution} /></Suspense>

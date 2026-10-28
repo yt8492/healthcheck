@@ -83,7 +83,7 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
     </details>;
   }
   return <section className="chart-panel sleep-panel" aria-labelledby="sleep-title" aria-busy={loading}>
-    <div className="chart-heading"><div><p className="eyebrow">SLEEP</p><h2 id="sleep-title">睡眠の記録</h2><p>段階と覚醒を振り返る · 起床日で集計（JST）</p></div></div>
+    <div className="chart-heading"><div><h2 id="sleep-title">睡眠の記録</h2><p>起床日で集計（JST）</p></div></div>
     <div className="sleep-period" aria-label="睡眠の表示期間">
       <p>{dateTime(selected.from)} ～ {dateTime(selected.to)}</p>
       <div className="sleep-presets" aria-label="睡眠の期間を選択">{[1, 7, 30, 90].map(days => <button key={days}

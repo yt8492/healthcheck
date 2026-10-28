@@ -29,8 +29,8 @@ await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 await mkdir(join(output, 'about'), { recursive: true });
 await writeFile(join(output, 'about', 'index.html'), page({
-  title: 'healthcheck — 健康の記録を、振り返る。',
-  description: 'マヤミトが運営する、本人のFitbit心拍・睡眠・活動データをGoogle Health APIで取得・保存し、振り返りと公開に利用する個人サービス。',
+  title: 'healthcheckについて | healthcheck',
+  description: 'マヤミト本人のFitbit心拍・睡眠・活動データをGoogle Health APIで取得・保存・公開する個人サービス。',
   path: '/about/',
   root: '../',
   content: await readFile(join(source, 'home.html'), 'utf8'),

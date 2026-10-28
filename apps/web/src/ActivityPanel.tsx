@@ -44,7 +44,7 @@ export function ActivityPanel({ range, reload }: { range: TimeRange; reload: num
   }
   const spec = activitySpecs[metric], status = data?.status;
   return <section className="chart-panel activity-panel" aria-labelledby="activity-title" aria-busy={loading}>
-    <div className="chart-heading"><div><p className="eyebrow">ACTIVITY</p><h2 id="activity-title">活動の記録</h2><p>歩数・距離・総消費カロリー・アクティブゾーン時間</p></div>
+    <div className="chart-heading"><div><h2 id="activity-title">活動の記録</h2><p>歩数・距離・総消費カロリー・アクティブゾーン時間</p></div>
       <label>活動の指標<select value={metric} onChange={event => { if (isActivityMetric(event.target.value)) choose(selected, event.target.value); }}>{ACTIVITY_METRICS.map(m => <option key={m} value={m}>{activitySpecs[m].label}</option>)}</select></label></div>
     <div className="sleep-period" aria-label="活動の表示期間"><p>{dateTime(selected.from)} ～ {dateTime(selected.to)} JST</p>
       <div className="sleep-presets">{[1, 7, 30, 90].map(days => <button key={days} aria-label={`活動${days}日`} onClick={() => {
