@@ -5,8 +5,8 @@ export const sleepLabels: Record<SleepStageType, string> = {
   deep: '深い睡眠', asleep: '睡眠（段階なし）', unknown: '段階未提供',
 };
 export const sleepColors: Record<SleepStageType, string> = {
-  awake: '#d34e85', restless: '#cf9609', rem: '#55cbe5', light: '#4778f5',
-  deep: '#60278c', asleep: '#547565', unknown: '#8c97a3',
+  awake: '#e78baa', restless: '#e2bd70', rem: '#75cde1', light: '#7fafff',
+  deep: '#b38cdb', asleep: '#94c5b0', unknown: '#a8b3bf',
 };
 export function sleepDurationParts(minutes: number) {
   const rounded = Math.round(minutes * 10);

@@ -7,6 +7,7 @@ import type { CustomSeriesRenderItem } from 'echarts';
 import type { SleepSession } from '@healthcheck/core';
 import { dateTime, timeOnly } from './time.js';
 import { sleepColors, sleepLabels, sleepMinutes, sleepRows } from './sleepPresentation.js';
+import { chartColors } from './chartTheme.js';
 
 echarts.use([CustomChart, GridComponent, TooltipComponent, SVGRenderer]);
 const ROW_HEIGHT = 64;
@@ -18,6 +19,7 @@ export default function SleepTimeline({ session }: { session: SleepSession }) {
   const rows = useMemo(() => sleepRows(session), [session]);
   useEffect(() => {
     if (!element.current) return;
+    const colors = chartColors(element.current);
     const chart = echarts.init(element.current, undefined, { renderer: 'svg' });
     const start = Date.parse(session.startTime), end = Date.parse(session.endTime);
     // カテゴリ数が1つでも、同じ行間・位置で段階未提供を表示する。
@@ -27,7 +29,7 @@ export default function SleepTimeline({ session }: { session: SleepSession }) {
       const [left, center] = api.coord([start, y(row)]) as [number, number];
       const [right] = api.coord([end, y(row)]) as [number];
       return { type: 'rect', silent: true, shape: { x: left, y: center - TRACK_HEIGHT / 2, width: right - left, height: TRACK_HEIGHT, r: TRACK_HEIGHT / 2 },
-        style: { fill: '#edf0f7' } };
+        style: { fill: colors.surface } };
     };
     const interval: CustomSeriesRenderItem = (params, api) => {
       const stage = session.stages[params.dataIndex];
@@ -42,7 +44,7 @@ export default function SleepTimeline({ session }: { session: SleepSession }) {
         { type: 'line', silent: true, shape: { x1: left, y1: previousCenter, x2: left, y2: center },
           style: { stroke: color, opacity: 0.3, lineWidth: 1.4 } },
         { type: 'rect', shape: { x: Math.min(left, api.getWidth() - width - 2), y: center - TRACK_HEIGHT / 2, width, height: TRACK_HEIGHT, r: Math.min(11, width / 2) },
-          style: { fill: stage.type === 'rem' ? '#b7eff8' : stage.type === 'unknown' ? '#d9dfe5' : color,
+          style: { fill: stage.type === 'rem' ? '#b7eff8' : stage.type === 'unknown' ? '#64768a' : color,
             stroke: stage.type === 'rem' || stage.type === 'unknown' ? color : undefined,
             lineWidth: stage.type === 'rem' ? 2 : 1,
             lineDash: stage.type === 'unknown' ? [3, 3] : undefined } },
@@ -54,8 +56,8 @@ export default function SleepTimeline({ session }: { session: SleepSession }) {
         bottom: rows.length === 1 ? 28 : ROW_HEIGHT + 8 - TRACK_CENTER },
       xAxis: { type: 'time', min: start, max: end, show: false },
       yAxis: { type: 'value', min: 0, max: Math.max(1, rows.length - 1), inverse: true, show: false },
-      tooltip: { trigger: 'item', confine: true, backgroundColor: '#243348', borderWidth: 0,
-        textStyle: { color: '#fff', fontFamily: 'Noto Sans JP, sans-serif', fontSize: 12 },
+      tooltip: { trigger: 'item', confine: true, backgroundColor: colors.surface, borderWidth: 0,
+        textStyle: { color: colors.text, fontFamily: 'Noto Sans JP, sans-serif', fontSize: 12 },
         formatter: (params: unknown) => {
           const stage = session.stages[(params as { dataIndex: number }).dataIndex];
           if (!stage) return '';

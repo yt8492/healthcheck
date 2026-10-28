@@ -5,24 +5,28 @@ import { GridComponent, TooltipComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import { MINUTE, activitySpecs, type ActivityResponse } from '@healthcheck/core';
 import { dateTime, timeOnly } from './time.js';
+import { chartColors } from './chartTheme.js';
 
 echarts.use([BarChart, GridComponent, TooltipComponent, SVGRenderer]);
 export default function ActivityChart({ data }: { data: ActivityResponse }) {
   const element = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!element.current) return;
+    const colors = chartColors(element.current);
     const chart = echarts.init(element.current, undefined, { renderer: 'svg' });
     const unit = activitySpecs[data.metric].displayUnit;
     chart.setOption({ animation: false, grid: { top: 38, right: 25, bottom: 45, left: 65 },
-      tooltip: { trigger: 'axis', confine: true, formatter: (params: unknown) => {
+      tooltip: { trigger: 'axis', confine: true, backgroundColor: colors.surface, borderWidth: 0, textStyle: { color: colors.text }, formatter: (params: unknown) => {
         const p = data.points[(params as { dataIndex: number }[])[0]?.dataIndex ?? -1];
         if (!p) return '';
         return `${dateTime(p.from)} ～ ${dateTime(p.to)} JST<br/>${p.total === null ? '値なし' : `${p.total.toLocaleString('ja-JP', { maximumFractionDigits: 3 })} ${unit}`}<br/>値あり ${p.availableMinutes} / ${p.totalMinutes}分`;
       } },
       xAxis: { type: 'time', min: data.from, max: Date.parse(data.to) - MINUTE, splitNumber: 6,
-        axisLabel: { hideOverlap: true, formatter: (ms: number) => data.resolution === '1m' ? timeOnly(ms) : data.resolution === '1d' ? dateTime(new Date(ms).toISOString()).split(' ')[0] : dateTime(new Date(ms).toISOString()) } },
-      yAxis: { type: 'value', name: unit, min: 0, splitLine: { lineStyle: { type: 'dashed', color: '#e8ece6' } } },
-      series: [{ type: 'bar', name: activitySpecs[data.metric].label, itemStyle: { color: '#497f6d' },
+        axisLine: { lineStyle: { color: colors.border } },
+        axisLabel: { color: colors.muted, hideOverlap: true, formatter: (ms: number) => data.resolution === '1m' ? timeOnly(ms) : data.resolution === '1d' ? dateTime(new Date(ms).toISOString()).split(' ')[0] : dateTime(new Date(ms).toISOString()) } },
+      yAxis: { type: 'value', name: unit, min: 0, nameTextStyle: { color: colors.muted },
+        axisLabel: { color: colors.muted }, splitLine: { lineStyle: { type: 'dashed', color: colors.border } } },
+      series: [{ type: 'bar', name: activitySpecs[data.metric].label, itemStyle: { color: colors.primary },
         data: data.points.map(p => [p.from, p.total]) }],
     });
     const observer = new ResizeObserver(() => chart.resize()); observer.observe(element.current);

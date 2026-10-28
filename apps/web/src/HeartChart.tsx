@@ -5,6 +5,7 @@ import { GridComponent, TooltipComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import { DAY, heartResolutionLabels, type HeartBucket, type HeartResolution } from '@healthcheck/core';
 import { dateTime, timeOnly } from './time.js';
+import { chartColors } from './chartTheme.js';
 
 echarts.use([LineChart, GridComponent, TooltipComponent, SVGRenderer]);
 
@@ -12,11 +13,12 @@ export function HeartChart({ points, resolution }: { points: HeartBucket[]; reso
   const element = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!element.current) return;
+    const colors = chartColors(element.current);
     const chart = echarts.init(element.current, undefined, { renderer: 'svg' });
     chart.setOption({
       animation: false,
       grid: { top: 28, right: 20, bottom: 42, left: 48 },
-      tooltip: { trigger: 'axis', confine: true, backgroundColor: '#163d36', borderWidth: 0, textStyle: { color: '#fff' },
+      tooltip: { trigger: 'axis', confine: true, backgroundColor: colors.surface, borderWidth: 0, textStyle: { color: colors.text },
         formatter: (params: unknown) => {
           const items = params as { dataIndex: number }[];
           const point = points[items[0]?.dataIndex ?? -1];
@@ -27,22 +29,22 @@ export function HeartChart({ points, resolution }: { points: HeartBucket[]; reso
         },
       },
       xAxis: { type: 'time', min: points[0]?.time, max: points.at(-1)?.time, splitNumber: 6,
-        axisLine: { lineStyle: { color: '#d9e0d9' } }, axisTick: { show: false },
-        axisLabel: { color: '#68756c', hideOverlap: true, formatter: (value: number) => points.length && Date.parse(points.at(-1)!.to) - Date.parse(points[0]!.time) > DAY ? dateTime(new Date(value).toISOString()).split(' ')[0] : timeOnly(value) },
-        splitLine: { show: false }, axisPointer: { lineStyle: { color: '#547a6c', type: 'dashed' } },
+        axisLine: { lineStyle: { color: colors.border } }, axisTick: { show: false },
+        axisLabel: { color: colors.muted, hideOverlap: true, formatter: (value: number) => points.length && Date.parse(points.at(-1)!.to) - Date.parse(points[0]!.time) > DAY ? dateTime(new Date(value).toISOString()).split(' ')[0] : timeOnly(value) },
+        splitLine: { show: false }, axisPointer: { lineStyle: { color: colors.primary, type: 'dashed' } },
       },
-      yAxis: { type: 'value', name: 'bpm', nameTextStyle: { color: '#68756c', align: 'right', padding: [0, 8, 0, 0] },
+      yAxis: { type: 'value', name: 'bpm', nameTextStyle: { color: colors.muted, align: 'right', padding: [0, 8, 0, 0] },
         min: (value: { min: number }) => Math.max(0, Math.floor(value.min / 10) * 10 - 10),
-        axisLabel: { color: '#68756c' }, splitLine: { lineStyle: { color: '#e8ece6', type: 'dashed' } },
+        axisLabel: { color: colors.muted }, splitLine: { lineStyle: { color: colors.border, type: 'dashed' } },
       },
       series: [
         { name: '最小', type: 'line', stack: 'range', stackStrategy: 'all', symbol: 'none', lineStyle: { opacity: 0 },
           emphasis: { disabled: true }, data: points.map(p => [p.time, p.value?.min ?? null]) },
         { name: '最小〜最大', type: 'line', stack: 'range', stackStrategy: 'all', symbol: 'none', lineStyle: { opacity: 0 },
-          areaStyle: { color: '#91b7a5', opacity: 0.28 }, emphasis: { disabled: true },
+          areaStyle: { color: colors.range, opacity: 0.28 }, emphasis: { disabled: true },
           data: points.map(p => [p.time, p.value ? p.value.max - p.value.min : null]) },
         { name: `${heartResolutionLabels[resolution]}平均`, type: 'line', symbol: points.length === 1 ? 'circle' : 'none', connectNulls: false,
-          lineStyle: { color: '#236653', width: 1.7 }, itemStyle: { color: '#236653' },
+          lineStyle: { color: colors.primary, width: 1.7 }, itemStyle: { color: colors.primary },
           data: points.map(p => [p.time, p.value?.avg ?? null]) },
       ],
     });
