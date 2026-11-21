@@ -25,7 +25,10 @@ export function moveRange(range: TimeRange, direction: number, now = Date.now())
 export function rangeFromUrl(): { range: TimeRange; resolution: HeartResolution | 'auto'; error?: string } {
   const q = new URLSearchParams(location.search);
   try {
-    const range = !q.has('from') && !q.has('to') ? recentRange(Date.now()) : validateRange(q.get('from'), q.get('to'), Date.now(), 90 * 1440);
+    const now = Date.now();
+    const keys = ([['from', 'to'], ['sleepFrom', 'sleepTo'], ['activityFrom', 'activityTo']] as const)
+      .find(([from, to]) => q.has(from) || q.has(to));
+    const range = keys ? validateRange(q.get(keys[0]), q.get(keys[1]), now, 90 * 1440) : recentRange(now);
     const resolution = q.get('resolution') ?? 'auto';
     const selected = heartResolution(resolution, range);
     return { range, resolution: resolution === 'auto' ? 'auto' : selected };

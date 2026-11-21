@@ -30,4 +30,18 @@ describe('心拍の期間とURL', () => {
     vi.stubGlobal('location', { search: `?${new URLSearchParams({ from: new Date(retentionStart(now) - MINUTE).toISOString(), to: new Date(floorMinute(now)).toISOString() })}` });
     expect(rangeFromUrl().error).toContain('90日');
   });
+  it('旧URLの期間を共有期間に読み替え、共有期間があれば優先する', () => {
+    vi.useFakeTimers(); vi.setSystemTime(now);
+    const week = presetRange(7, now);
+    const day = presetRange(1, now);
+    for (const prefix of ['sleep', 'activity']) {
+      const params = new URLSearchParams({ [`${prefix}From`]: week.from, [`${prefix}To`]: week.to });
+      vi.stubGlobal('location', { search: `?${params}` });
+      expect(rangeFromUrl().range).toEqual(week);
+      params.set('from', day.from);
+      params.set('to', day.to);
+      vi.stubGlobal('location', { search: `?${params}` });
+      expect(rangeFromUrl().range).toEqual(day);
+    }
+  });
 });

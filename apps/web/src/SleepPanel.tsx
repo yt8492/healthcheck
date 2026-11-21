@@ -1,17 +1,10 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
-import { DAY, HOUR, SLEEP_STAGES, floorMinute, retentionStart, summarizeSleep, validateRange,
+import { DAY, HOUR, SLEEP_STAGES, floorMinute, retentionStart, summarizeSleep,
   type PublicStatus, type SleepCoverage, type SleepResponse, type SleepSession, type TimeRange } from '@healthcheck/core';
-import { dateTime, toInput } from './time.js';
+import { dateTime } from './time.js';
 import { sleepDurationParts, sleepLabels as labels, sleepMinutes as minutes } from './sleepPresentation.js';
 
 const SleepTimeline = lazy(() => import('./SleepTimeline.js'));
-function savedRange(fallback: TimeRange): TimeRange {
-  const q = new URLSearchParams(location.search);
-  if (!q.has('sleepFrom') && !q.has('sleepTo')) return fallback;
-  // URLの不正値は呼び出し元で明示する。
-  return validateRange(q.get('sleepFrom'), q.get('sleepTo'), Date.now(), 90 * 24 * 60);
-}
-
 export async function loadSleep(range: TimeRange, signal: AbortSignal): Promise<{ sessions: SleepSession[]; status: PublicStatus; coverage: SleepCoverage }> {
   const sessions = new Map<string, SleepSession>();
   const seen = new Set<string>();
@@ -35,39 +28,24 @@ export async function loadSleep(range: TimeRange, signal: AbortSignal): Promise<
   return { sessions: [...sessions.values()].sort((a, b) => a.startTime.localeCompare(b.startTime)), status, coverage };
 }
 
-export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; reload: number; showHeart: (range: TimeRange) => void }) {
-  const [selected, setSelected] = useState(range);
-  const [from, setFrom] = useState(toInput(range.from)), [to, setTo] = useState(toInput(range.to));
-  const [inputError, setInputError] = useState('');
+export function SleepPanel({ range, reload, fillPeriod }: { range: TimeRange; reload: number; fillPeriod: (range: TimeRange) => void }) {
   const [data, setData] = useState<Awaited<ReturnType<typeof loadSleep>> | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState(''), [retry, setRetry] = useState(0);
   useEffect(() => {
-    try { setSelected(savedRange(range)); setInputError(''); }
-    catch (error) { setSelected(range); setInputError(error instanceof Error ? error.message : '睡眠のURLが不正です。'); }
-  }, [range]);
-  useEffect(() => { setFrom(toInput(selected.from)); setTo(toInput(selected.to)); }, [selected]);
-  useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setError(''); setData(null);
-    loadSleep(selected, controller.signal).then(result => { if (!controller.signal.aborted) setData(result); })
+    loadSleep(range, controller.signal).then(result => { if (!controller.signal.aborted) setData(result); })
       .catch(error => { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : '睡眠の読み取りに失敗しました。'); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [selected, reload, retry]);
-  function choose(next: TimeRange) {
-    setSelected(next); setInputError('');
-    const url = new URL(location.href);
-    url.searchParams.set('sleepFrom', next.from); url.searchParams.set('sleepTo', next.to);
-    history.pushState({}, '', url);
-  }
-  const summary = data ? summarizeSleep(data.sessions, selected) : null;
-  const long = Date.parse(selected.to) - Date.parse(selected.from) > 2 * DAY;
-  const selectedDuration = Date.parse(selected.to) - Date.parse(selected.from);
+  }, [range, reload, retry]);
+  const summary = data ? summarizeSleep(data.sessions, range) : null;
+  const long = Date.parse(range.to) - Date.parse(range.from) > 2 * DAY;
   const status = data?.status;
   function context(session: SleepSession) {
     const to = Math.min(floorMinute(Date.now()), floorMinute(Date.parse(session.endTime)) + HOUR);
     const from = Math.max(retentionStart(Date.now()), Math.max(to - DAY, floorMinute(Date.parse(session.startTime)) - HOUR));
-    showHeart({ from: new Date(from).toISOString(), to: new Date(to).toISOString() });
+    fillPeriod({ from: new Date(from).toISOString(), to: new Date(to).toISOString() });
   }
   function details(session: SleepSession) {
     return <details className="sleep-session" key={session.id}>
@@ -75,7 +53,7 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
       <p>実際の開始：<time dateTime={session.startTime}>{new Date(Date.parse(session.startTime) + 9 * HOUR).toISOString().replace('T', ' ').replace('Z', '')} JST</time></p>
       <p>実際の終了：<time dateTime={session.endTime}>{new Date(Date.parse(session.endTime) + 9 * HOUR).toISOString().replace('T', ' ').replace('Z', '')} JST</time></p>
       <p>JSTの起床日：{session.wakeDate} · セッション全体 {minutes(session.durationMinutes)} · 覚醒・離床 {minutes(session.stageMinutes.awake)}</p>
-      <button onClick={() => context(session)}>この睡眠前後の心拍を見る</button>
+      <button onClick={() => context(session)}>この睡眠前後の日時を入力</button>
       <div className="table-wrap"><table><caption>セッション全体の段階・覚醒（JST）。短い覚醒と離床は重なりを除いて計上。</caption>
         <thead><tr><th>開始</th><th>終了</th><th>段階</th><th>分</th></tr></thead><tbody>{session.stages.map(stage => <tr key={stage.startTime}>
           <td>{dateTime(stage.startTime)}</td><td>{dateTime(stage.endTime)}</td><td>{labels[stage.type]}</td><td>{((Date.parse(stage.endTime) - Date.parse(stage.startTime)) / 60_000).toFixed(1)}</td>
@@ -84,21 +62,6 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
   }
   return <section className="chart-panel sleep-panel" aria-labelledby="sleep-title" aria-busy={loading}>
     <div className="chart-heading"><div><h2 id="sleep-title">睡眠の記録</h2><p>起床日で集計（JST）</p></div></div>
-    <div className="sleep-period" aria-label="睡眠の表示期間">
-      <p>{dateTime(selected.from)} ～ {dateTime(selected.to)}</p>
-      <div className="sleep-presets" aria-label="睡眠の期間を選択">{[1, 7, 30, 90].map(days => <button key={days}
-        aria-label={days === 1 ? '睡眠24時間' : `睡眠${days}日`} aria-pressed={Math.abs(selectedDuration - days * DAY) < 120_000} onClick={() => {
-        const to = floorMinute(Date.now());
-        choose({ from: new Date(Math.max(retentionStart(Date.now()), to - days * DAY)).toISOString(), to: new Date(to).toISOString() });
-      }}>{days === 1 ? '1日' : days === 7 ? '1週間' : `${days}日`}</button>)}</div>
-      <details className="date-controls"><summary>睡眠の日時を指定する</summary><form onSubmit={event => {
-        event.preventDefault();
-        try { choose(validateRange(`${from}:00+09:00`, `${to}:00+09:00`, Date.now(), 90 * 24 * 60)); }
-        catch (error) { setInputError(error instanceof Error ? error.message : '日時を確認してください。'); }
-      }}><label>睡眠の開始（JST）<input type="datetime-local" required value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>睡眠の終了（JST）<input type="datetime-local" required value={to} onChange={e => setTo(e.target.value)} /></label><button type="submit">睡眠を表示する</button></form></details>
-      {inputError && <p className="inline-error" role="alert">{inputError}</p>}
-    </div>
     {loading ? <p className="sleep-message" role="status">睡眠の全ページを読み込んでいます</p>
       : error ? <div className="alert" role="alert"><p>{error}</p><button onClick={() => setRetry(v => v + 1)}>睡眠を再試行</button></div>
       : <>
@@ -111,7 +74,7 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
             : data?.coverage !== 'fetched' ? 'この期間の睡眠は未取得、または一部だけ取得済みです。'
               : 'この期間に取得できた睡眠はありません。未装着・未提供・記録なしの区別はできません。'}</p>
           : <>
-            {(long || data.sessions.length > 1 || data.sessions.some(s => s.startTime < selected.from || s.endTime > selected.to)) &&
+            {(long || data.sessions.length > 1 || data.sessions.some(s => s.startTime < range.from || s.endTime > range.to)) &&
               <p className="sleep-overview">表示期間内の合計：睡眠 {minutes(summary?.asleepMinutes ?? null)} · {summary?.sessionCount}セッション</p>}
             {long && <div className="sleep-legend">{SLEEP_STAGES.map(type => <span key={type}><i className={`sleep-color ${type}`} />{labels[type]}</span>)}</div>}
             {long ? <div className="sleep-days" aria-label="起床日別の睡眠内訳">{summary?.days.map(day => <details key={day.date}>
@@ -121,7 +84,7 @@ export function SleepPanel({ range, reload, showHeart }: { range: TimeRange; rel
               <p>{SLEEP_STAGES.map(type => `${labels[type]} ${minutes(day.stageMinutes[type])}`).join(' / ')}</p>
               {data.sessions.filter(s => s.wakeDate === day.date).map(details)}
             </details>)}</div>
-              : <SleepSessionView sessions={data.sessions} range={selected} details={details} />}
+              : <SleepSessionView sessions={data.sessions} range={range} details={details} />}
           </>}
       </>}
     <p className="chart-foot">内訳は表示期間と重なる部分だけを集計。詳細にはセッション全体を表示します。段階未提供を睡眠0とは扱いません。</p>

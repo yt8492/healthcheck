@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { floorMinute, heartResolution, heartResolutionLabels, retentionStart, type HeartResolution, type TimeRange, type TimeseriesResponse } from '@healthcheck/core';
 import { dateOnly, dateTime, inputRange, moveRange, presetRange, rangeFromUrl, toInput } from './time.js';
 import { ActivityPanel } from './ActivityPanel.js';
@@ -14,11 +14,11 @@ const errorMessages: Record<string, string> = {
   'storage-error': 'データの保存に失敗しました。',
 };
 const bpm = (value: number | null | undefined) => value == null ? '—' : value.toFixed(1);
-function setUrl(range: TimeRange, resolution: HeartResolution | 'auto', replace = false, clearSleep = false) {
+function setUrl(range: TimeRange, resolution: HeartResolution | 'auto', replace = false) {
   const url = new URL(location.href);
   url.searchParams.set('from', range.from); url.searchParams.set('to', range.to);
   url.searchParams.set('resolution', resolution);
-  if (clearSleep) { url.searchParams.delete('sleepFrom'); url.searchParams.delete('sleepTo'); url.searchParams.delete('activityFrom'); url.searchParams.delete('activityTo'); }
+  for (const param of ['sleepFrom', 'sleepTo', 'activityFrom', 'activityTo']) url.searchParams.delete(param);
   history[replace ? 'replaceState' : 'pushState']({}, '', url);
 }
 
@@ -29,14 +29,23 @@ export function App() {
   const [from, setFrom] = useState(toInput(initial.range.from));
   const [to, setTo] = useState(toInput(initial.range.to));
   const [inputError, setInputError] = useState(initial.error ?? '');
+  const [resolutionError, setResolutionError] = useState('');
   const [data, setData] = useState<TimeseriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [reload, setReload] = useState(0);
+  const dateControls = useRef<HTMLDetailsElement>(null);
+  const startInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setUrl(initial.range, initial.resolution, true);
-    const pop = () => { const restored = rangeFromUrl(); setInputError(restored.error ?? ''); setRange(restored.range); setResolution(restored.resolution); };
+    const pop = () => {
+      const restored = rangeFromUrl();
+      setInputError(restored.error ?? '');
+      setRange(current => current.from === restored.range.from && current.to === restored.range.to ? current : restored.range);
+      setResolution(restored.resolution);
+      setResolutionError('');
+    };
     window.addEventListener('popstate', pop);
     return () => window.removeEventListener('popstate', pop);
   }, [initial]);
@@ -55,14 +64,22 @@ export function App() {
     return () => controller.abort();
   }, [range, resolution, reload]);
 
-  function choose(next: TimeRange, selected = resolution) {
-    try {
-      heartResolution(selected, next);
-      setInputError(''); setRange(next); setResolution(selected); setUrl(next, selected, false, true);
-    } catch (error) { setInputError(error instanceof Error ? error.message : '表示期間と粒度を確認してください。'); }
+  function choosePeriod(next: TimeRange, selected = resolution) {
+    try { heartResolution(selected, next); }
+    catch { selected = 'auto'; }
+    setInputError(''); setResolutionError('');
+    setRange(next); setResolution(selected); setUrl(next, selected);
   }
-  function move(direction: number) {
-    choose(moveRange(range, direction));
+  function fillPeriod(next: TimeRange) {
+    setFrom(toInput(next.from)); setTo(toInput(next.to)); setInputError('');
+    if (dateControls.current) dateControls.current.open = true;
+    startInput.current?.focus();
+  }
+  function chooseResolution(selected: HeartResolution | 'auto') {
+    try {
+      heartResolution(selected, range);
+      setResolutionError(''); setResolution(selected); setUrl(range, selected);
+    } catch (error) { setResolutionError(error instanceof Error ? error.message : '心拍の表示粒度を確認してください。'); }
   }
   const hasData = Boolean(data?.summary.availableMinutes);
   const status = data?.status;
@@ -73,24 +90,25 @@ export function App() {
   return <div className="shell">
     <main>
       {status?.environment === 'emulator' && <div className="demo-note" role="note">Emulatorの架空データ <span>画面と保存処理を確認するための記録です。</span></div>}
+      <section className="chart-panel period-panel" role="group" aria-label="表示期間">
+        <div className="period-top"><div><span className="eyebrow">表示期間</span><p className="period-title">{dateTime(range.from)} <span>—</span> {dateTime(range.to)} JST</p></div>
+          <div className="period-actions"><div className="period-presets" role="group" aria-label="期間プリセット">{[1, 7, 30, 90].map(days => <button key={days} className="preset" onClick={() => choosePeriod(presetRange(days), 'auto')}>{days === 1 ? '直近24時間' : `${days}日`}</button>)}</div><div className="arrows"><button aria-label="前の期間" disabled={Date.parse(range.from) <= retentionStart(Date.now())} onClick={() => choosePeriod(moveRange(range, -1))}>←</button><button aria-label="次の期間" disabled={Date.parse(range.to) >= floorMinute(Date.now())} onClick={() => choosePeriod(moveRange(range, 1))}>→</button></div></div>
+        </div>
+        <details className="date-controls" ref={dateControls}><summary>日時を指定する</summary><form onSubmit={event => { event.preventDefault(); try { choosePeriod(inputRange(from, to)); } catch (error) { setInputError(error instanceof Error ? error.message : '日時を確認してください。'); } }}>
+          <label>開始日時（JST）<input ref={startInput} type="datetime-local" value={from} onChange={e => setFrom(e.target.value)} required /></label>
+          <label>終了日時（JST）<input type="datetime-local" value={to} onChange={e => setTo(e.target.value)} required /></label>
+          <button className="primary" type="submit">表示する</button><p className="form-help">直近90日以内を指定できます。</p>
+        </form></details>
+        {inputError && <p className="inline-error" role="alert">{inputError}</p>}
+      </section>
       <section className="chart-panel" aria-labelledby="heart-title">
         <div className="chart-heading">
           <h1 id="heart-title">心拍の記録</h1>
           <div className="sync-info"><span className={`status-pill ${status?.state === 'error' ? 'warning' : ''}`}><span aria-hidden="true" />{fetchError ? '読み取りエラー' : statusLabel}</span><p>最終同期 <strong>{status?.lastSuccessAt ? dateTime(status.lastSuccessAt) : '未同期'}</strong></p></div>
         </div>
 
-        <div className="period-panel" role="group" aria-label="表示期間">
-          <div className="period-top"><div><span className="eyebrow">表示期間</span><p className="period-title">{dateTime(range.from)} <span>—</span> {dateTime(range.to)}</p></div>
-            <div className="period-actions"><div className="heart-presets" aria-label="心拍の期間プリセット">{[1, 7, 30, 90].map(days => <button key={days} className="preset" onClick={() => choose(presetRange(days), 'auto')}>{days === 1 ? '直近24時間' : `${days}日`}</button>)}</div><div className="arrows"><button aria-label="前の期間" disabled={Date.parse(range.from) <= retentionStart(Date.now())} onClick={() => move(-1)}>←</button><button aria-label="次の期間" disabled={Date.parse(range.to) >= floorMinute(Date.now())} onClick={() => move(1)}>→</button></div></div>
-          </div>
-          <label className="heart-resolution">心拍の表示粒度<select value={resolution} onChange={event => choose(range, event.target.value as HeartResolution | 'auto')}><option value="auto">自動</option>{Object.entries(heartResolutionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <details className="date-controls"><summary>日時を指定する</summary><form onSubmit={event => { event.preventDefault(); try { choose(inputRange(from, to)); } catch (error) { setInputError(error instanceof Error ? error.message : '日時を確認してください。'); } }}>
-            <label>開始日時（JST）<input type="datetime-local" value={from} onChange={e => setFrom(e.target.value)} required /></label>
-            <label>終了日時（JST）<input type="datetime-local" value={to} onChange={e => setTo(e.target.value)} required /></label>
-            <button className="primary" type="submit">表示する</button><p className="form-help">直近90日以内を指定できます。表示区間は最大4,096件です。</p>
-          </form></details>
-          {inputError && <p className="inline-error" role="alert">{inputError}</p>}
-        </div>
+        <label className="heart-resolution">心拍の表示粒度<select value={resolution} onChange={event => chooseResolution(event.target.value as HeartResolution | 'auto')}><option value="auto">自動</option>{Object.entries(heartResolutionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        {resolutionError && <p className="inline-error" role="alert">{resolutionError}</p>}
 
         {fetchError && <div className="alert" role="alert"><p>{fetchError}</p><button onClick={() => setReload(v => v + 1)}>再試行</button></div>}
         {status?.error && <div className="alert" role="status"><p>{errorMessages[status.error.code]}<br/><span>保存済みの記録を表示しています。最終試行：{dateTime(status.error.at)}</span></p></div>}
@@ -115,7 +133,7 @@ export function App() {
         </div>
       </section>
 
-      <SleepPanel range={range} reload={reload} showHeart={choose} />
+      <SleepPanel range={range} reload={reload} fillPeriod={fillPeriod} />
 
       <ActivityPanel range={range} reload={reload} />
 

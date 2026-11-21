@@ -48,12 +48,12 @@ main { padding-top: 40px; }
 .status-pill.warning > span { background: var(--warning); }
 .sync-info p { font-size: 10px; color: var(--muted); margin-top: 9px; }
 .sync-info strong { font-weight: 400; margin-left: 8px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.period-panel { margin: 20px 0; }
+.chart-panel.period-panel { margin-bottom: 24px; padding-bottom: 18px; }
 .period-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
 .period-title { font-size: 14px; margin-top: 6px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .period-title > span { margin: 0 13px; color: var(--muted); }
 .period-actions { display: flex; flex-wrap: wrap; gap: 12px; }
-.heart-presets { display: flex; flex-wrap: wrap; gap: 5px; }
+.period-presets { display: flex; flex-wrap: wrap; gap: 5px; }
 .heart-resolution { flex-direction: row; align-items: center; gap: 12px; margin-top: 16px; font-size: 12px; }
 .heart-resolution select { padding: 8px 12px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; }
 .preset { color: var(--text); border-color: var(--control-border); background: var(--surface-raised); white-space: nowrap; }
@@ -100,12 +100,6 @@ h1, h2 { font-size: 17px; font-weight: 500; margin: 6px 0 7px; letter-spacing: .
 @keyframes rotate { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loader { animation: none; } }
 .sleep-panel { margin-top: 24px; padding-bottom: 0; }
-.sleep-period { margin: 20px 0 14px; font-size: 12px; }
-.sleep-period > p { font-size: 14px; color: var(--text); font-variant-numeric: tabular-nums; }
-.sleep-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; margin-top: 16px; border-radius: 28px; background: var(--surface-raised); max-width: 540px; }
-.sleep-presets button { border: 0; border-radius: 24px; color: var(--muted); background: transparent; min-height: 42px; padding: 9px 12px; font-size: 13px; }
-.sleep-presets button:hover { background: var(--surface-raised); }
-.sleep-presets button[aria-pressed="true"] { color: var(--on-accent); background: var(--accent); font-weight: 600; }
 .sleep-sync-details { color: var(--muted); font-size: 11px; margin: 12px 0 20px; }
 .sleep-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 11px; margin: 12px 0 18px; }
 .sleep-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -160,8 +154,6 @@ h1, h2 { font-size: 17px; font-weight: 500; margin: 6px 0 7px; letter-spacing: .
 .sleep-session table { min-width: 370px; }
 .sleep-panel .chart-foot { display: block; font-size: 11px; line-height: 1.9; }
 @media (max-width: 600px) {
-  .sleep-period > p { font-size: 12px; }
-  .sleep-presets button { padding: 9px 4px; font-size: 12px; }
   .sleep-duration-value { font-size: 32px; }
   .sleep-duration-value small { font-size: 18px; }
   .sleep-duration-line p { font-size: 11px; }
@@ -200,5 +192,3 @@ footer a { margin-left: auto; font-size: 10px; color: var(--muted); }
 .activity-total span, .activity-sync { font-size: .85rem; color: var(--muted); line-height: 1.7; }
 .activity-panel .chart-heading { flex-wrap: wrap; }
 .activity-panel { margin-top: 24px; }
-.activity-panel .sleep-presets { border-radius: 12px; }
-.activity-panel .sleep-presets button:last-child { grid-column: 1 / -1; justify-self: start; white-space: nowrap; }

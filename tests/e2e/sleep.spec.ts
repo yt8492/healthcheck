@@ -7,7 +7,7 @@ test('睡眠の全ページ・起床日ごとの内訳・詳細・URL復元を�
   const sleep = page.getByRole('region', { name: '睡眠の記録', exact: true });
   await expect(sleep.getByText('睡眠の全ページを読み込んでいます')).toHaveCount(0);
   await expect(sleep.getByRole('img', { name: /睡眠段階/ }).first()).toBeVisible();
-  await sleep.getByRole('button', { name: '睡眠90日', exact: true }).click();
+  await page.getByRole('button', { name: '90日', exact: true }).click();
   await expect(sleep.locator('.sleep-days > details')).toHaveCount(90);
   expect(cursorRequests).toBeGreaterThanOrEqual(3);
   const saved = page.url();
@@ -25,9 +25,12 @@ test('睡眠の全ページ・起床日ごとの内訳・詳細・URL復元を�
   await expect(session.getByRole('table')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `.cache/previews/sleep-${info.project.name}.png`, fullPage: true });
-  await session.getByRole('button', { name: 'この睡眠前後の心拍を見る' }).click();
+  await session.getByRole('button', { name: 'この睡眠前後の日時を入力' }).click();
+  const periods = page.getByRole('group', { name: '表示期間', exact: true });
+  await expect(periods.getByLabel('開始日時（JST）')).toBeFocused();
+  await expect(page).toHaveURL(saved);
+  await periods.getByRole('button', { name: '表示する', exact: true }).click();
   await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
-  expect(new URL(page.url()).searchParams.has('sleepFrom')).toBe(false);
 });
 
 test('部分期間でも睡眠詳細には実際の開始と終了を表示する', async ({ page }) => {
@@ -49,11 +52,11 @@ test('睡眠の途中ページが失敗した場合に部分データを完全�
     } else await route.continue();
   });
   await page.goto('/');
-  await page.getByRole('button', { name: '睡眠90日', exact: true }).click();
+  await page.getByRole('button', { name: '90日', exact: true }).click();
   const sleep = page.getByRole('region', { name: '睡眠の記録', exact: true });
   await expect(sleep.getByRole('alert')).toContainText('睡眠の記録を読み取れません');
   await expect(sleep.locator('.sleep-overview')).toHaveCount(0);
-  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
+  await expect(page.getByRole('img', { name: /心拍の1日（JST）平均/ })).toBeVisible();
 });
 
 test('未取得期間の空表示と、取得成功した空データを区別する', async ({ page }) => {

@@ -5,12 +5,12 @@ test('活動の単位別表示・90日の日別集計・URL復元・心拍との
   await page.goto('/');
   const panel = page.getByRole('region', { name: '活動の記録', exact: true });
   await expect(panel.getByRole('img', { name: /歩数の合計グラフ/ })).toBeVisible();
-  const heartFrom = new URL(page.url()).searchParams.get('from');
   for (const [metric, label] of [['distance', '距離'], ['total-calories', '総消費カロリー'], ['active-zone-minutes', 'アクティブゾーン時間']] as const) {
     await panel.getByLabel('活動の指標').selectOption(metric);
     await expect(panel.getByRole('img', { name: new RegExp(`${label}の合計グラフ`) })).toBeVisible();
   }
-  await panel.getByRole('button', { name: '活動90日', exact: true }).click();
+  const periods = page.getByRole('group', { name: '表示期間', exact: true });
+  await periods.getByRole('button', { name: '90日', exact: true }).click();
   await expect(panel.getByText('JSTの1日ごとの既知値の合計。', { exact: false })).toBeVisible();
   await panel.locator('summary').filter({ hasText: '活動の日別合計を確認する' }).click();
   await expect(panel.getByRole('table')).toBeVisible();
@@ -19,8 +19,8 @@ test('活動の単位別表示・90日の日別集計・URL復元・心拍との
   const saved = page.url(); await page.reload(); await expect(page).toHaveURL(saved);
   await expect(panel.getByLabel('活動の指標')).toHaveValue('active-zone-minutes');
   await expect(panel.getByRole('img', { name: /アクティブゾーン時間の合計グラフ/ })).toBeVisible();
-  await panel.getByRole('button', { name: '心拍と同じ期間' }).click();
-  await expect.poll(() => new URL(page.url()).searchParams.get('activityFrom')).toBe(heartFrom);
+  await periods.getByRole('button', { name: '直近24時間', exact: true }).click();
+  await expect(panel.getByText('1分ごとの既知値の合計。', { exact: false })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(errors).toEqual([]);
   await page.screenshot({ path: `.cache/previews/activity-${info.project.name}.png`, fullPage: true });
