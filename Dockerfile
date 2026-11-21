@@ -5,7 +5,7 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 COPY tsconfig.json ./
-RUN npm ci && npm run build && npm prune --omit=dev
+RUN npm ci && npm run build:api && npm prune --omit=dev
 
 FROM node:24-bookworm-slim
 WORKDIR /app

@@ -11,3 +11,6 @@ dist/
 test-results/
 playwright-report/
 .DS_Store
+.gradle/
+.kotlin/
+apps/web/build/

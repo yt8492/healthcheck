@@ -1,59 +1,60 @@
 import { expect, test } from '@playwright/test';
+import { boot, click, jump } from './compose.js';
 
-test('活動の単位別表示・90日の日別集計・URL復元・心拍との期間一致', async ({ page }, info) => {
-  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/');
-  const panel = page.getByRole('region', { name: '活動の記録', exact: true });
-  await expect(panel.getByRole('img', { name: /歩数の合計グラフ/ })).toBeVisible();
+test('活動の指標・90日集計・URL復元', async ({ page }, info) => {
+  await boot(page);
+  await jump(page, '活動');
+  await expect(page.getByRole('img', { name: '歩数の合計グラフ', exact: true })).toHaveCount(1);
   for (const [metric, label] of [['distance', '距離'], ['total-calories', '総消費カロリー'], ['active-zone-minutes', 'アクティブゾーン時間']] as const) {
-    await panel.getByLabel('活動の指標').selectOption(metric);
-    await expect(panel.getByRole('img', { name: new RegExp(`${label}の合計グラフ`) })).toBeVisible();
+    await click(page, page.getByRole('button', { name: label, exact: true }));
+    await expect(page.getByRole('img', { name: `${label}の合計グラフ`, exact: true })).toHaveCount(1);
+    expect(new URL(page.url()).searchParams.get('activityMetric')).toBe(metric);
   }
-  const periods = page.getByRole('group', { name: '表示期間', exact: true });
-  await periods.getByRole('button', { name: '90日', exact: true }).click();
-  await expect(panel.getByText('JSTの1日ごとの既知値の合計。', { exact: false })).toBeVisible();
-  await panel.locator('summary').filter({ hasText: '活動の日別合計を確認する' }).click();
-  await expect(panel.getByRole('table')).toBeVisible();
-  expect(await panel.locator('tbody tr').count()).toBeGreaterThanOrEqual(90);
-  await expect(panel.getByRole('cell', { name: '途中集計・欠損あり', exact: true }).first()).toBeVisible();
-  const saved = page.url(); await page.reload(); await expect(page).toHaveURL(saved);
-  await expect(panel.getByLabel('活動の指標')).toHaveValue('active-zone-minutes');
-  await expect(panel.getByRole('img', { name: /アクティブゾーン時間の合計グラフ/ })).toBeVisible();
-  await periods.getByRole('button', { name: '直近24時間', exact: true }).click();
-  await expect(panel.getByText('1分ごとの既知値の合計。', { exact: false })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  expect(errors).toEqual([]);
-  await page.screenshot({ path: `.cache/previews/activity-${info.project.name}.png`, fullPage: true });
+  await jump(page, '期間');
+  await click(page, page.getByRole('button', { name: '90日', exact: true }));
+  await jump(page, '活動');
+  await expect(page.getByText(/^JSTの1日ごとの既知値の合計。/)).toHaveCount(1);
+  await click(page, page.getByRole('button', { name: /活動の日別合計を確認する/ }));
+  await expect(page.getByText(/^\d{4}-\d\d-\d\d$/, { exact: true })).toHaveCount(91);
+  await jump(page, '期間');
+  await click(page, page.getByRole('button', { name: '7日', exact: true }));
+  const saved = page.url();
+  await boot(page, saved);
+  await jump(page, '活動');
+  await expect(page.getByRole('img', { name: 'アクティブゾーン時間の合計グラフ', exact: true })).toHaveCount(1);
+  expect(new URL(page.url()).searchParams.get('activityMetric')).toBe('active-zone-minutes');
+  await page.screenshot({ path: `.cache/previews/compose-activity-${info.project.name}.png` });
 });
 
-test('活動だけの通信失敗を表示し、他の指標を維持して再試行できる', async ({ page }) => {
+test('活動だけの通信失敗から再試行でき、心拍を維持する', async ({ page }) => {
   let fail = true;
-  await page.route('**/api/v1/timeseries?*', async route => {
-    const metric = new URL(route.request().url()).searchParams.get('metric');
-    if (metric === 'steps' && fail) await route.fulfill({ status: 503, json: { error: { code: 'storage-unavailable' } } });
-    else await route.continue();
-  });
-  await page.goto('/');
-  const panel = page.getByRole('region', { name: '活動の記録', exact: true });
-  await expect(panel.getByRole('alert')).toContainText('活動の記録を読み取れません');
-  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
-  fail = false; await panel.getByRole('button', { name: '活動を再試行' }).click();
-  await expect(panel.getByRole('img', { name: /歩数の合計グラフ/ })).toBeVisible();
+  await page.route('**/api/v1/timeseries?*', route => new URL(route.request().url()).searchParams.get('metric') === 'steps' && fail
+    ? route.fulfill({ status: 503, json: { error: { code: 'storage-unavailable' } } }) : route.continue());
+  await boot(page);
+  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toHaveCount(1);
+  await jump(page, '活動');
+  await expect(page.getByText('活動の記録を読み取れません。再試行してください。', { exact: true })).toBeVisible();
+  fail = false;
+  await click(page, page.getByRole('button', { name: '活動を再試行', exact: true }));
+  await expect(page.getByRole('img', { name: '歩数の合計グラフ', exact: true })).toHaveCount(1);
 });
 
-test('取得済みの0と、未取得で数値のない状態を区別する', async ({ page }) => {
+test('取得済みの0と未取得の値を区別する', async ({ page }) => {
   let fetched = false;
   await page.route('**/api/v1/timeseries?*', async route => {
     if (new URL(route.request().url()).searchParams.get('metric') !== 'steps') { await route.continue(); return; }
-    const response = await route.fetch(), body = await response.json();
+    const body = await (await route.fetch()).json();
     await route.fulfill({ json: { ...body, coverage: fetched ? 'fetched' : 'not-fetched',
       points: body.points.map((p: object) => ({ ...p, total: fetched ? 0 : null })),
       summary: { ...body.summary, total: fetched ? 0 : null, availableMinutes: fetched ? 1 : 0 } } });
   });
-  await page.goto('/'); const panel = page.getByRole('region', { name: '活動の記録', exact: true });
-  await expect(panel.locator('.activity-total strong')).toContainText('—');
-  await expect(panel.getByText('この期間の活動はまだ取得していません。')).toBeVisible();
-  fetched = true; await page.reload();
-  await expect(panel.locator('.activity-total strong')).toContainText('0');
-  await expect(panel.getByRole('img', { name: /歩数の合計グラフ/ })).toBeVisible();
+  await boot(page);
+  await jump(page, '活動');
+  await expect(page.getByText('歩数：— 歩', { exact: true })).toBeVisible();
+  await expect(page.getByText('この期間の活動はまだ取得していません。', { exact: true })).toBeVisible();
+  fetched = true;
+  await boot(page, page.url());
+  await jump(page, '活動');
+  await expect(page.getByText('歩数：0 歩', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: '歩数の合計グラフ', exact: true })).toHaveCount(1);
 });

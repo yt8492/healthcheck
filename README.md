@@ -4,7 +4,7 @@ Google Health APIから本人の心拍・睡眠・活動を取得し、Firestore
 
 ## ローカル起動
 
-Node.js 24 LTS、npm、Java 21以上（Firestore Emulator用）が必要です。
+Node.js 24 LTS、npm、Java 21以上が必要です。フロントエンドはCompose MultiplatformのKotlin/Wasm版で、Gradle Wrapperを同梱しています。初回ビルドではKotlin・Compose・Node.jsなどの依存ファイルを取得します。Chrome・Firefox・SafariのWasmGC対応版を対象とし、古いブラウザ向けのJSフォールバックは提供しません。
 
 ```sh
 npm ci
@@ -24,7 +24,7 @@ GOOGLE_CLOUD_PROJECT=demo-healthcheck npm run seed:emulator
 GOOGLE_CLOUD_PROJECT=demo-healthcheck FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run dev
 ```
 
-画面は http://localhost:5173 、APIは http://127.0.0.1:3001 。画面に「Emulatorの架空データ」と表示されます。終了するときは各ターミナルでCtrl+Cを押します。Emulatorのデータは終了時に消えます。
+画面は http://127.0.0.1:5173 、APIは http://127.0.0.1:3001 。画面に「Emulatorの架空データ」と表示されます。終了するときは各ターミナルでCtrl+Cを押します。Emulatorのデータは終了時に消えます。
 
 ## 本人のデータを接続する
 
@@ -147,6 +147,8 @@ GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID npm run sync
 
 ## 検証・ビルド
 
+`check`と`test`はTypeScript側とCompose Web側の両方を対象にします。KotlinのブラウザテストにはChrome/Chromiumが必要です。macOSの標準位置にあるGoogle Chromeは自動検出し、その他の環境では`CHROME_BIN`で実行ファイルを指定します。
+
 ```sh
 npm run check
 npm test
@@ -160,7 +162,17 @@ npm run build
 GOOGLE_CLOUD_PROJECT=demo-healthcheck FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 PORT=3001 npm start
 ```
 
-Cloud Run向けに`Dockerfile`を用意しています。Serviceは`dist/api/server.js`、Jobは`dist/sync/cli.js sync`を実行します。同期プロセスは`GOOGLE_HEALTH_CREDENTIAL_SECRET=projects/…/secrets/…/versions/latest`で`{client_id,client_secret,refresh_token}`のJSONを読み取ります。閲覧用プロセスはFirestoreの読み取り専用で、この秘密への権限を持ちません。
+`npm run build:api`はAPIと同期CLIだけ、`npm run build:web`はCompose Webだけをビルドします。`npm run build`は両方を生成します。Webの成果物は`dist/web`です。開発用の`npm run dev`はAPIとGradleの継続ビルドを同時に起動し、画面からの`/api`リクエストをAPIへ中継します。
+
+Cloud Run向けに`Dockerfile`を用意しています。コンテナは`build:api`で生成したAPIと同期CLIだけを含み、ダッシュボードはFirebase Hostingから配信します。Serviceは`dist/api/server.js`、Jobは`dist/sync/cli.js sync`を実行します。同期プロセスは`GOOGLE_HEALTH_CREDENTIAL_SECRET=projects/…/secrets/…/versions/latest`で`{client_id,client_secret,refresh_token}`のJSONを読み取ります。閲覧用プロセスはFirestoreの読み取り専用で、この秘密への権限を持ちません。
+
+## Compose Web
+
+`apps/web`は独立したGradleプロジェクトです。画面、心拍の折れ線と最小〜最大の帯、活動の棒グラフ、睡眠タイムラインをComposeで描画します。既存のJSON API、`from/to/resolution/activityMetric`のURL、JSTの日付境界を利用します。睡眠の全ページ取得が成功するまで合計を表示せず、欠損・未知の値と0を区別します。
+
+日本語にはNoto Sans JPの可変フォントを同梱しています。通常・中太・太字のフォント登録を完了してから画面を表示し、フォント取得失敗時は再読み込みを案内します。フォント本体とOFLライセンスは`apps/web/src/commonMain/composeResources`にあります。表示に使う日本語を外部フォントサービスから取得する必要はありません。読み上げ向けの追加対応は対象外です。
+
+Kotlinのテストは期間境界・URL互換・欠損・睡眠集計・APIページングを検証します。Playwrightではビルド済みのWasmを使い、デスクトップとモバイル幅で期間変更・履歴・入力・グラフ・再試行・フォント読み込みを検証します。
 
 実データによる値・時刻の照合は本人のOAuth接続とFirestore準備後に行います。Emulatorでの合格は、Google Health APIで本人のデータが取得できることの証明とは区別します。
 
@@ -172,7 +184,7 @@ Google Cloud CLIで対象プロジェクトのオーナーとしてログイン�
 npm run cloud:deploy -- --project YOUR_PROJECT_ID --region asia-northeast1
 ```
 
-APIの有効化、専用サービスアカウントと権限、認証情報のSecret登録、コンテナビルド、Service/Jobのデプロイ、初回同期の完了確認、15分ごとのScheduler設定を行い、公開URLを出力します。既存DBと異なるリージョンは拒否します。公開範囲は心拍・睡眠APIとダッシュボードです。既存Secretが心拍だけの場合は、再接続後に`cloud:credentials`で睡眠権限付きの認証情報を登録してから更新します。
+APIの有効化、専用サービスアカウントと権限、認証情報のSecret登録、コンテナビルド、Service/Jobのデプロイ、初回同期の完了確認、15分ごとのScheduler設定を行い、公開APIのURLを出力します。既存DBと異なるリージョンは拒否します。ダッシュボードの公開は別途Firebase Hostingで行います。既存Secretが心拍だけの場合は、再接続後に`cloud:credentials`で睡眠権限付きの認証情報を登録してから更新します。
 
 ビルドに送るソースは`.gcloudignore`で限定し、OAuthの実際の値が含まれないか送信前に検査します。Cloud Storageにはビルド用のソースを一時配置して1日経過後に削除します。心拍データやOAuth JSONをビルド用Storageへ送ることはありません。詳しい確認・停止・再接続・ロールバック手順は[クラウド運用](./docs/cloud-operations.md)にあります。
 

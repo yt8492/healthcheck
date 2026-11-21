@@ -16,6 +16,8 @@ scripts/*
 !infra/
 infra/*
 !infra/cloudbuild.yaml
+apps/web/**
+!apps/web/package.json
 **/*.test.ts
 **/*.test.tsx
 **/.env*

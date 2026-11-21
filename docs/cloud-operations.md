@@ -25,13 +25,13 @@
 
 ## 初回公開・再デプロイ
 
-Node.js 24、npm、ログイン済みGoogle Cloud CLI、対象プロジェクトのオーナー権限、Cloud Billingが必要。既存DBの配置に合わせて指定する。
+Node.js 24、npm、ログイン済みGoogle Cloud CLI、対象プロジェクトのオーナー権限、Cloud Billingが必要。Compose Webのビルド・テストにはJava 21以上と、Kotlinのブラウザテスト用のChrome/Chromiumも必要。既存DBの配置に合わせて指定する。
 
 ```sh
 npm ci
 npm run check
 npm test
-npm run build
+npm run build:api
 npm run cloud:deploy -- --project YOUR_PROJECT_ID --region asia-northeast1
 ```
 
@@ -39,7 +39,7 @@ npm run cloud:deploy -- --project YOUR_PROJECT_ID --region asia-northeast1
 
 デプロイは既存リソースを名前で再利用する。実行途中で失敗した場合は、原因を修正して同じコマンドで再開できる。ビルド成功後の設定だけをやり直す場合は`--image asia-northeast1-docker.pkg.dev/YOUR_PROJECT_ID/healthcheck/healthcheck@sha256:DIGEST`を追加すると、そのイメージから再開する。初回同期が失敗した場合は定期起動を新規作成せず停止する。作成済みの定期起動がある再デプロイでは、その状態を保持する。
 
-ServiceとJobは同じイメージdigestを使用する。`cloud:deploy`の出力にCloud RunのHTTPS URLが表示される。このコマンドはHostingやDNSを変更しない。
+ServiceとJobは同じイメージdigestを使用する。コンテナはAPIと同期CLIだけを含み、Compose WebとフォントはFirebase Hostingから配信する。`cloud:deploy`の出力にCloud RunのHTTPS URLが表示される。このコマンドはHostingやDNSを変更しない。
 
 心拍の長期間表示を初めて導入するときは、更新したコードで`GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID npm run aggregate:heart`を実行する。保存済み分値から90日以内の表示用集計を7日ずつ作り、上流への再取得と最終同期成功時刻の更新はしない。通常同期と共通の期限付きロックを使うため、実行中なら完了後に再実行する。再実行しても同じ集計は書き直さず、移行完了まではAPIが分値から計算する。Serviceと同期Jobを更新してから再度実行すれば、旧Jobと切り替わる間の変更も反映できる。過去データの初期取り込み（Issue #1）とは別の処理である。
 

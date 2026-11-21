@@ -1,120 +1,117 @@
 import { expect, test } from '@playwright/test';
+import { boot, click, jump, setDate } from './compose.js';
 
-test('24時間の記録・期間移動・URL復元・日時指定', async ({ page }, info) => {
+test('24時間の記録・期間移動・URL復元・日時入力', async ({ page }, info) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/');
-  const heart = page.getByRole('region', { name: '心拍の記録', exact: true });
-  await expect(heart.getByRole('heading', { name: '心拍の記録', exact: true })).toBeVisible();
-  const period = page.getByRole('group', { name: '表示期間', exact: true });
-  await expect(period).toHaveCount(1);
-  await expect(period).toBeVisible();
-  await expect(page.getByText('Emulatorの架空データ', { exact: false })).toBeVisible();
-  await expect(heart.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
-  await expect(page.locator('.coverage')).toContainText('1440');
-  expect(new URL(page.url()).searchParams.get('from')).toBeTruthy();
+  await boot(page);
+  await expect(page.getByText(/Emulatorの架空データ/)).toBeVisible();
+  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toHaveCount(1);
   const current = page.url();
-  await page.getByRole('button', { name: '前の期間', exact: true }).click();
+  await click(page, page.getByRole('button', { name: '前の期間', exact: true }));
   await expect(page).not.toHaveURL(current);
-  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
   const previous = page.url();
-  await page.reload();
+  await boot(page, previous);
   await expect(page).toHaveURL(previous);
-  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
-  await page.getByText('日時を指定する', { exact: true }).click();
-  await expect(page.getByLabel('開始日時（JST）')).toBeVisible();
-  await page.getByRole('button', { name: '表示する', exact: true }).click();
-  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await click(page, page.getByRole('button', { name: '日時を指定する', exact: true }));
+  const start = new URL(page.url()).searchParams.get('from')!;
+  const jst = new Date(Date.parse(start) + 10 * 3_600_000).toISOString().slice(0, 16).replace('T', ' ');
+  await setDate(page, '開始日時（JST）', `${jst.slice(0, 14)}03`);
+  await click(page, page.getByRole('button', { name: '表示する', exact: true }));
+  await expect(page).toHaveURL(/from=[^&]*%3A03%3A00/);
+  await jump(page, '心拍');
+  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toHaveCount(1);
+  await click(page, page.getByRole('img', { name: /心拍の1分平均/ }));
+  await expect(page.getByText(/^平均 .* bpm · 最小 /)).toHaveCount(1);
+  await page.screenshot({ path: `.cache/previews/compose-heart-${info.project.name}.png` });
   expect(errors).toEqual([]);
-  await page.screenshot({ path: `.cache/previews/${info.project.name}.png`, fullPage: true });
 });
 
 test('未同期の状態では架空の値を作らない', async ({ page }) => {
   await page.route('**/api/v1/timeseries?*', async route => {
     if (new URL(route.request().url()).searchParams.get('metric') !== 'heart-rate') { await route.continue(); return; }
-    const original = await route.fetch(); const body = await original.json();
-    await route.fulfill({ json: { ...body, points: body.points.map((p: { time: string }) => ({ ...p, value: null })),
+    const body = await (await route.fetch()).json();
+    await route.fulfill({ json: { ...body, points: body.points.map((p: object) => ({ ...p, value: null })),
       summary: { avg: null, min: null, max: null, availableMinutes: 0, totalMinutes: 1440, latest: null },
       status: { ...body.status, state: 'not-synced', lastSuccessAt: null, dataThrough: null } } });
   });
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'まだ記録がありません' })).toBeVisible();
-  await expect(page.locator('.stat-value').first()).toContainText('—');
+  await boot(page);
+  await jump(page, '心拍');
+  await expect(page.getByText('まだ記録がありません', { exact: true })).toBeVisible();
+  await expect(page.getByText('—', { exact: true })).toHaveCount(4);
   await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toHaveCount(0);
 });
 
-test('DB障害をデータなしとして表示しない', async ({ page }) => {
-  await page.route('**/api/v1/timeseries?*', route => new URL(route.request().url()).searchParams.get('metric') === 'heart-rate' ? route.fulfill({ status: 503, json: { error: { code: 'storage-unavailable' } } }) : route.continue());
-  await page.goto('/');
-  await expect(page.getByRole('alert')).toContainText('記録を読み取れません');
-  await expect(page.getByRole('heading', { name: '記録を表示できません' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '再試行', exact: true })).toBeVisible();
+test('DB障害をデータなしとせず、再試行で復帰する', async ({ page }) => {
+  let fail = true;
+  await page.route('**/api/v1/timeseries?*', route => fail && new URL(route.request().url()).searchParams.get('metric') === 'heart-rate'
+    ? route.fulfill({ status: 503, json: { error: { code: 'storage-unavailable' } } }) : route.continue());
+  await boot(page);
+  await jump(page, '心拍');
+  await expect(page.getByText('心拍の記録を読み取れません。再試行してください。', { exact: true })).toBeVisible();
+  fail = false;
+  await click(page, page.getByRole('button', { name: '心拍を再試行', exact: true }));
+  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toHaveCount(1);
 });
 
-test('7・30・90日、粒度、任意期間、履歴復元と保存境界', async ({ page }, info) => {
-  await page.goto('/');
-  const period = page.getByRole('group', { name: '表示期間', exact: true });
+test('7・30・90日、粒度、履歴復元と保存境界', async ({ page }) => {
+  await boot(page);
   for (const [days, resolution, label] of [[7, '5m', '5分'], [30, '1h', '1時間'], [90, '1d', '1日（JST）']] as const) {
-    const response = page.waitForResponse(r => {
-      const q = new URL(r.url()).searchParams;
-      return r.url().includes('/timeseries?') && q.get('metric') === 'heart-rate' && q.get('resolution') === 'auto';
-    });
-    await period.getByRole('button', { name: `${days}日`, exact: true }).click();
+    await jump(page, '期間');
+    const response = page.waitForResponse(r => new URL(r.url()).searchParams.get('metric') === 'heart-rate');
+    await click(page, page.getByRole('button', { name: `${days}日`, exact: true }));
     const body = await (await response).json();
-    expect(body.resolution).toBe(resolution); expect(body.points.length).toBeLessThanOrEqual(4096);
+    expect(body.resolution).toBe(resolution);
+    expect(body.points.length).toBeLessThanOrEqual(4096);
     expect(body.summary.availableMinutes).toBeGreaterThan(0);
-    await expect(page.getByRole('img', { name: `心拍の${label}平均と最小・最大のグラフ。下の表でも値を確認できます。`, exact: true })).toBeVisible();
-    expect(new URL(page.url()).searchParams.get('resolution')).toBe('auto');
+    await jump(page, '心拍');
+    await expect(page.getByRole('img', { name: `心拍の${label}平均と最小・最大のグラフ`, exact: true })).toHaveCount(1);
   }
-  await expect(page.getByRole('button', { name: '前の期間', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: '次の期間', exact: true })).toBeDisabled();
+  await jump(page, '期間');
   const daily = page.url();
-  await page.reload();
+  await click(page, page.getByRole('button', { name: '前の期間', exact: true }));
   await expect(page).toHaveURL(daily);
-  await expect(page.getByRole('img', { name: /心拍の1日（JST）平均/ })).toBeVisible();
-  await page.getByLabel('心拍の表示粒度').selectOption('1m');
-  await expect(page.getByRole('region', { name: '心拍の記録', exact: true }).getByRole('alert')).toContainText('4096');
-  await expect(page.getByLabel('心拍の表示粒度')).toHaveValue('auto');
-  await period.getByRole('button', { name: '7日', exact: true }).click();
-  await page.getByLabel('心拍の表示粒度').selectOption('1h');
-  await expect(page.getByRole('img', { name: /心拍の1時間平均/ })).toBeVisible();
+  await click(page, page.getByRole('button', { name: '次の期間', exact: true }));
+  await expect(page).toHaveURL(daily);
+  // Reload a range away from the moving retention boundary: a saved 90-day
+  // boundary legitimately expires when the wall clock advances one minute.
+  await click(page, page.getByRole('button', { name: '7日', exact: true }));
+  const weekly = page.url();
+  await boot(page, weekly);
+  await expect(page).toHaveURL(weekly);
+  await jump(page, '心拍');
+  await click(page, page.getByRole('button', { name: '心拍の表示粒度 1分', exact: true }));
+  await expect(page.getByText(/4096/)).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('resolution')).toBe('auto');
+  await click(page, page.getByRole('button', { name: '心拍の表示粒度 1時間', exact: true }));
+  await expect(page.getByRole('img', { name: /心拍の1時間平均/ })).toHaveCount(1);
   const hourly = page.url();
-  await page.getByRole('button', { name: '前の期間', exact: true }).click();
+  await jump(page, '期間');
+  await click(page, page.getByRole('button', { name: '前の期間', exact: true }));
   await expect(page).not.toHaveURL(hourly);
   await page.goBack();
   await expect(page).toHaveURL(hourly);
-  await expect(page.getByLabel('心拍の表示粒度')).toHaveValue('1h');
-  await period.getByText('日時を指定する', { exact: true }).click();
-  const start = await page.getByLabel('開始日時（JST）').inputValue();
-  await page.getByLabel('開始日時（JST）').fill(`${start.slice(0, 11)}01:03`);
-  await page.getByRole('button', { name: '表示する', exact: true }).click();
-  await expect(page.getByRole('img', { name: /心拍の1時間平均/ })).toBeVisible();
-  expect(new URL(page.url()).searchParams.get('from')).toContain(':03:00.000Z');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: `.cache/previews/heart-long-${info.project.name}.png`, fullPage: true });
+  await jump(page, '心拍');
+  await expect(page.getByRole('img', { name: /心拍の1時間平均/ })).toHaveCount(1);
 });
 
 test('共通の表示期間を全指標に適用し、履歴で復元する', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
-  const initialUrl = page.url();
-  const initialFrom = new URL(initialUrl).searchParams.get('from');
-  const paths = ['heart-rate', 'sleep', 'steps'];
-  const responses = paths.map(metric => page.waitForResponse(response => {
+  await boot(page);
+  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toHaveCount(1);
+  const initialUrl = page.url(), initialFrom = new URL(initialUrl).searchParams.get('from');
+  const responses = ['heart-rate', 'sleep', 'steps'].map(metric => page.waitForResponse(response => {
     const url = new URL(response.url());
     return response.ok() && url.searchParams.get('from') !== initialFrom &&
       (metric === 'sleep' ? url.pathname === '/api/v1/sleep' : url.pathname === '/api/v1/timeseries' && url.searchParams.get('metric') === metric);
   }));
-  await page.getByRole('group', { name: '表示期間', exact: true }).getByRole('button', { name: '7日', exact: true }).click();
+  await click(page, page.getByRole('button', { name: '7日', exact: true }));
   const range = new URL(page.url()).searchParams;
   for (const response of await Promise.all(responses)) {
     const query = new URL(response.url()).searchParams;
     expect(query.get('from')).toBe(range.get('from'));
     expect(query.get('to')).toBe(range.get('to'));
   }
-  await expect(page.getByRole('img', { name: /心拍の5分平均/ })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(initialUrl);
-  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
+  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toHaveCount(1);
 });

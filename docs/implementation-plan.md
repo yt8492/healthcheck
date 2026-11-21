@@ -28,13 +28,13 @@ Google Health APIから本人のFitbit Airのデータを定期取得し、Fires
 
 | 部分 | 技術・配置 | 役割 |
 | --- | --- | --- |
-| ダッシュボード | React、TypeScript、Vite、Apache ECharts | 期間選択、グラフ、睡眠詳細、同期状態の表示 |
-| 公開API | Node.js 24 LTS、TypeScript、Fastify、Cloud Run Service | Firestoreからデータを読み、表示向けJSONを返す。ビルド済みフロントエンドも配信 |
+| ダッシュボード | Compose Multiplatform、Kotlin/Wasm、Firebase Hosting | 期間選択、Compose Canvasによるグラフ、睡眠詳細、同期状態の表示 |
+| 公開API | Node.js 24 LTS、TypeScript、Fastify、Cloud Run Service | Firestoreからデータを読み、表示向けJSONを返す |
 | 取得・集計 | TypeScript、Cloud Run Job | Google Health APIの取得、正規化、保存、表示用集計、期限超過データの削除 |
 | 定期実行 | Cloud Scheduler | 原則15分ごとに同期ジョブを起動 |
 | 保存 | Firestore Standard、Native modeの既定データベース | 時系列、日別値、睡眠セッション、同期状態を保存 |
 | 認証情報 | Secret Manager | OAuthクライアント情報とrefresh tokenの保存 |
-| 開発・検証 | npm workspaces、Vitest、Firestore Emulator、Playwright | 共有型、集計・保存処理・API・主要画面操作の検証 |
+| 開発・検証 | Gradle、Kotlin Test、npm workspaces、Vitest、Firestore Emulator、Playwright | 集計・保存処理・API・主要画面操作の検証 |
 
 ```mermaid
 flowchart LR
@@ -43,14 +43,15 @@ flowchart LR
     secrets[Secret Manager] -->|認証情報| sync
     sync -->|取得値と集計を保存| db[Firestore]
     db -->|保存データを読み取り| api[Cloud Run Service]
-    api -->|公開APIと画面を配信| browser[ダッシュボード]
+    api -->|JSON API| hosting[Firebase Hosting]
+    hosting -->|画面・フォント・API中継| browser[ダッシュボード]
 ```
 
 Cloud Run ServiceとJobは同じコードベースから作り、実行コマンドとサービスアカウントを分ける。閲覧のたびにGoogle Health APIを呼ばず、公開APIはFirestoreを読む。ブラウザからFirestoreへ直接アクセスする構成にはしない。
 
 新規に配置する場合の既定リージョンは、日本からの利用を想定して東京（asia-northeast1）とする。既存Firestoreのモード・リージョン・他用途での利用を確認し、適合する既定DBがあれば再利用する。APIと同期処理もDBと同じリージョンに置く。依存ライブラリは実装開始時に互換性を確認し、lockfileで固定する。[Node.jsのリリース情報](https://nodejs.org/en/about/previous-releases)
 
-EChartsは使うグラフと機能を選んで読み込む。[EChartsのモジュール読み込み](https://echarts.apache.org/handbook/en/basics/import/)
+2026年11月のフロントエンド移行では、Compose Webを使うことを目的にKotlin/Wasmへ置き換える。日本語フォントを同梱し、読み込み完了後に画面を表示する。古いブラウザ向けのフォールバックと読み上げ向けの追加対応は対象外。APIと保存形式は維持する。
 
 **3. 最初に確かめる外部条件**
 

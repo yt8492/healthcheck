@@ -53,7 +53,7 @@ async function ensureSecret() {
 
 async function auditUpload() {
   const files = gcloud(['meta', 'list-files-for-upload', '.'], true).split('\n').filter(Boolean);
-  for (const required of ['Dockerfile', 'scripts/build.mjs', 'infra/cloudbuild.yaml', 'apps/api/src/server.ts', 'apps/sync/src/cli.ts', 'apps/web/index.html']) {
+  for (const required of ['Dockerfile', 'scripts/build.mjs', 'infra/cloudbuild.yaml', 'apps/api/src/server.ts', 'apps/sync/src/cli.ts']) {
     if (!files.includes(required)) throw new Error(`送信対象にビルド必須ファイルがありません: ${required}`);
   }
   let privateValues: string[] = [];
