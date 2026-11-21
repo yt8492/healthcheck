@@ -71,10 +71,6 @@ export function App() {
   const statusLabel = !status ? '読み込み中' : status.state === 'ok' ? '同期済み' : status.state === 'not-synced' ? '接続待ち' : status.state === 'delayed' ? '同期が遅れています' : '同期に失敗';
 
   return <div className="shell">
-    <header className="masthead">
-      <a className="brand" href="/" aria-label="Healthcheck 直近24時間"><span className="brand-mark" aria-hidden="true">h<span>·</span></span><span>healthcheck</span></a>
-      <span className="timezone">Asia/Tokyo <span>JST</span></span>
-    </header>
     <main>
       {status?.environment === 'emulator' && <div className="demo-note" role="note">Emulatorの架空データ <span>画面と保存処理を確認するための記録です。</span></div>}
       <section className="intro">
@@ -113,7 +109,7 @@ export function App() {
           : hasData && data ? <Suspense fallback={<div className="chart-placeholder" role="status">グラフを準備しています</div>}><HeartChart points={data.points} resolution={data.resolution} /></Suspense>
           : <div className="chart-placeholder"><span className="empty-mark" aria-hidden="true">—</span><h3>{fetchError ? '記録を表示できません' : status?.state === 'not-synced' ? 'まだ記録がありません' : 'この期間のデータはありません'}</h3><p>{fetchError ? '読み取りエラーの解消後に再試行してください。' : status?.state === 'not-synced' ? '本人のGoogle連携と初回の心拍同期後に表示されます。' : '別の期間を選ぶと、保存された記録を確認できます。'}</p></div>}
         <div className="chart-foot"><p><span className="gap-key" aria-hidden="true" />全欠損の区間は線をつなぎません。一部欠損は取得できた分だけの平均です。</p><span>時刻はすべて日本時間</span></div>
-        <p className="form-help">平均は有効な1分平均の合計 ÷ 有効な分数。元の秒単位サンプル数による平均ではありません。帯は各区間の最小〜最大です。期間端の端数は指定範囲だけを集計します。</p>
+        <p className="chart-note">平均は有効な1分平均の合計 ÷ 有効な分数。元の秒単位サンプル数による平均ではありません。帯は各区間の最小〜最大です。期間端の端数は指定範囲だけを集計します。</p>
         {data && hasData && <details className="data-table"><summary>最後の60区間を表で確認する</summary><div className="table-wrap"><table><caption>選択期間の最後の60区間。単位：bpm</caption><thead><tr><th>期間（JST）</th><th>平均</th><th>最小</th><th>最大</th><th>取得できた分 / 対象分</th></tr></thead><tbody>{data.points.slice(-60).map(point => <tr key={point.time}><td>{dateTime(point.time)} ～ {dateTime(point.to)}</td><td>{bpm(point.value?.avg)}</td><td>{bpm(point.value?.min)}</td><td>{bpm(point.value?.max)}</td><td>{point.availableMinutes} / {point.totalMinutes}</td></tr>)}</tbody></table></div></details>}
       </section>
 

@@ -60,9 +60,8 @@ for (const document of [
 }
 
 // Explicit allowlist: application source, local credentials, and health data are never copied.
-for (const asset of ['styles.css', 'favicon.svg']) {
-  await copyFile(join(source, asset), join(output, asset));
-}
+await copyFile(join(source, 'styles.css'), join(output, 'styles.css'));
+await copyFile(join(repository, 'apps/web/public/favicon.png'), join(output, 'favicon.png'));
 await writeFile(join(output, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
 await writeFile(join(output, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${['/', '/about/', '/privacy/', '/terms/'].map((path) => `  <url><loc>${origin}${path}</loc></url>`).join('\n')}\n</urlset>\n`);
 console.log('Built introduction, privacy policy, and terms in site/dist.');

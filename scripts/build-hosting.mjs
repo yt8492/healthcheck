@@ -16,7 +16,7 @@ await mkdir(output, { recursive: true });
 // Only built browser assets and explicitly listed public pages reach Hosting.
 // Server bundles, credentials, and health data stay outside this directory.
 await cp(join(root, 'dist/web'), output, { recursive: true });
-for (const file of ['about', 'privacy', 'terms', 'styles.css', 'favicon.svg', 'robots.txt', 'sitemap.xml']) {
+for (const file of ['about', 'privacy', 'terms', 'styles.css', 'robots.txt', 'sitemap.xml']) {
   await cp(join(root, 'site/dist', file), join(output, file), { recursive: true });
 }
 console.log(`Built dashboard and public pages in dist/hosting (${(await readdir(output)).join(', ')}).`);
