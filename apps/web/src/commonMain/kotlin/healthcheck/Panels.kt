@@ -10,10 +10,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,11 +33,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HeartPanel(
     state: Load<HeartResponse>,
@@ -41,13 +48,7 @@ fun HeartPanel(
     retry: () -> Unit,
 ) {
     PanelCard("心拍の記録") {
-        Caption("心拍の表示粒度")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            heartResolutionLabels.forEach { (value, label) ->
-                FilterChip(selected = resolution == value, onClick = { onResolution(value) }, label = { Text(label) },
-                    modifier = Modifier.semantics { contentDescription = "心拍の表示粒度 $label" })
-            }
-        }
+        HeartResolutionDropdown(resolution, onResolution)
         resolutionError?.let { Notice(it) }
         OutlinedButton(onClick = onRefresh, enabled = state !is Load.Loading) { Text("記録を更新") }
         when (state) {
@@ -99,6 +100,40 @@ fun HeartPanel(
                 }
                 Caption("全欠損の区間は線をつなぎません。一部欠損は取得できた分だけの平均です。帯は各区間の最小〜最大です。")
                 Caption("平均は有効な1分平均の合計 ÷ 有効な分数。元の秒単位サンプル数による平均ではありません。期間端の端数は指定範囲だけを集計します。")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HeartResolutionDropdown(resolution: String, onResolution: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Caption("心拍の表示粒度")
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.widthIn(max = 240.dp).fillMaxWidth(),
+    ) {
+        OutlinedTextField(
+            value = heartResolutionLabels.getValue(resolution),
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth().semantics { contentDescription = "心拍の表示粒度" },
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            heartResolutionLabels.forEach { (value, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        expanded = false
+                        onResolution(value)
+                    },
+                    modifier = Modifier.semantics { selected = resolution == value },
+                )
             }
         }
     }
