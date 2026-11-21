@@ -4,9 +4,11 @@ test('24時間の記録・期間移動・URL復元・日時指定', async ({ pag
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: '心拍の記録', exact: true })).toBeVisible();
+  const heart = page.getByRole('region', { name: '心拍の記録', exact: true });
+  await expect(heart.getByRole('heading', { name: '心拍の記録', exact: true })).toBeVisible();
+  await expect(heart.getByRole('group', { name: '表示期間', exact: true })).toBeVisible();
   await expect(page.getByText('Emulatorの架空データ', { exact: false })).toBeVisible();
-  await expect(page.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
+  await expect(heart.getByRole('img', { name: /心拍の1分平均/ })).toBeVisible();
   await expect(page.locator('.coverage')).toContainText('1440');
   expect(new URL(page.url()).searchParams.get('from')).toBeTruthy();
   const current = page.url();
@@ -50,7 +52,7 @@ test('DB障害をデータなしとして表示しない', async ({ page }) => {
 
 test('7・30・90日、粒度、任意期間、履歴復元と保存境界', async ({ page }, info) => {
   await page.goto('/');
-  const period = page.getByRole('region', { name: '表示期間', exact: true });
+  const period = page.getByRole('group', { name: '表示期間', exact: true });
   for (const [days, resolution, label] of [[7, '5m', '5分'], [30, '1h', '1時間'], [90, '1d', '1日（JST）']] as const) {
     const response = page.waitForResponse(r => {
       const q = new URL(r.url()).searchParams;
